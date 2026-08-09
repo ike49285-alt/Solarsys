@@ -473,9 +473,23 @@ export default function AccretionDisk() {
               // population away unbounded
               const fragCount = bodies.length + spawned.length - removed.size < MAX_BODIES ? 2 : 1;
               const fragMass = smaller.mass / fragCount;
+              // real tidal streams are elongated radially away from (and
+              // toward) the disruptor, not scattered in every direction —
+              // and it matters here for more than realism: a fully random
+              // ejection angle could kick a fragment sideways or back
+              // toward the primary, leaving it inside the same Roche zone
+              // it was just shredded in, which re-triggers this exact
+              // event again the very next frame. Confirmed via an
+              // instrumented run: this was firing ~46,000 times in 2
+              // minutes on a single pair, reading as one small rock that
+              // "can't be absorbed," constantly flashing. Aiming outward
+              // with a real escape-scale kick (not a token nudge) gives a
+              // fragment an actual chance to clear the zone instead of
+              // re-entering it.
+              const outwardAngle = Math.atan2(smaller.y - bigger.y, smaller.x - bigger.x);
               for (let k = 0; k < fragCount; k++) {
-                const ang = Math.random() * Math.PI * 2;
-                const jitter = 0.3 * Math.sqrt((G * bigger.mass) / dist);
+                const ang = outwardAngle + (Math.random() - 0.5) * 1.4;
+                const jitter = 0.9 * Math.sqrt((2 * G * bigger.mass) / dist);
                 spawned.push({
                   x: smaller.x + Math.cos(ang) * smaller.r * 0.5,
                   y: smaller.y + Math.sin(ang) * smaller.r * 0.5,
