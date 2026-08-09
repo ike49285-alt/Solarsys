@@ -6,6 +6,24 @@ accreting into planets/brown dwarfs/stars around a barycenter. It's been
 built up incrementally in chat and was **freezing the browser tab**,
 especially noticeable on mobile.
 
+## How to open it
+`index.html` in this repo is a self-contained build of `accretion-disk.jsx`
+(React bundled right in) — no `npm install`, no build step, no server.
+
+- **Fastest, no setup:** on GitHub, open `index.html` → "Download raw file"
+  (or clone/download the whole repo as a ZIP) → double-click the downloaded
+  `index.html` → it opens straight in your browser and runs.
+- **A real shareable link:** turn on GitHub Pages once — repo **Settings →
+  Pages → Source → Deploy from a branch**, pick this branch and `/ (root)`,
+  **Save**. GitHub gives you a URL like
+  `https://ike49285-alt.github.io/Solarsys/` that anyone (including your
+  phone) can open directly, and it updates automatically every time this
+  `index.html` is pushed.
+
+`index.html` is a generated file — if you change `accretion-disk.jsx`, it
+needs to be rebuilt (ask Claude to rebuild it, or run the same bundling
+step yourself once you're comfortable with `npm`/`esbuild`).
+
 ## What's already been fixed
 
 ### 1. Unbounded population growth (patched earlier)
