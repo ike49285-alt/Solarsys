@@ -17,7 +17,6 @@
     height: 100dvh;
     background: #060710;
   }
-  /* loading state, replaced the instant React mounts */
   #root:empty::before {
     content: "loading accretion disk sim…";
     display: flex;
@@ -7540,7 +7539,8 @@
             const captureRadius = (a.r + b.r) * focusFactor;
             if (dist >= captureRadius) continue;
             const impactParam = Math.abs(dx * relVy - dy * relVx) / relSpeed;
-            const headOn = impactParam < 0.75 * (a.r + b.r);
+            const grazeThreshold = 0.75 + 0.3 * Math.max(0, 1 - relSpeed / escapeV);
+            const headOn = impactParam < grazeThreshold * (a.r + b.r);
             const bigger = a.mass >= b.mass ? a : b;
             const smaller = a.mass >= b.mass ? b : a;
             const smallerIsI = a.mass < b.mass;
@@ -7600,7 +7600,8 @@
               const nx = dx / dist, ny = dy / dist;
               const rel = relVx * nx + relVy * ny;
               if (rel < 0) {
-                const impulse = 2 * rel / (a.mass + b.mass);
+                const restitution = 0.85;
+                const impulse = (1 + restitution) * rel / (a.mass + b.mass);
                 a.vx += impulse * b.mass * nx;
                 a.vy += impulse * b.mass * ny;
                 b.vx -= impulse * a.mass * nx;
