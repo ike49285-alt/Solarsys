@@ -334,7 +334,24 @@ export default function AccretionDisk() {
           // 2012) — a slow but very grazing pass often "hit-and-runs"
           // rather than sticking, which a speed-only criterion misses.
           const impactParam = Math.abs(dx * relVy - dy * relVx) / relSpeed;
-          const headOn = impactParam < 0.75 * (a.r + b.r);
+          // The 0.75x threshold above assumes a real flyby with kinetic
+          // energy behind it. It doesn't account for a pair that's decayed
+          // into a near-circular mutual orbit sitting right at contact
+          // distance — that orbit's closing velocity at contact is always
+          // almost purely tangential, so impactParam sits near its own
+          // geometric ceiling (~dist, ~= a.r+b.r) forever regardless of how
+          // slow or damped the encounter gets. No amount of speed loss can
+          // ever satisfy a fixed 0.75x test in that shape, which without
+          // this widening let two bodies get stuck bouncing off each other
+          // every frame for dozens of seconds straight (confirmed via
+          // instrumented test run — see PR). So: the less kinetic budget an
+          // approach has left relative to escape velocity, the less able it
+          // realistically is to graze past rather than get captured — widen
+          // the threshold toward (and just past) the full combined radius
+          // as relSpeed -> 0, while leaving genuine energetic flybys at
+          // their original 0.75x test.
+          const grazeThreshold = 0.75 + 0.3 * Math.max(0, 1 - relSpeed / escapeV);
+          const headOn = impactParam < grazeThreshold * (a.r + b.r);
 
           // tidal disruption: when a much smaller body passes within the
           // Roche limit of a much larger one, tidal forces shred it
@@ -413,7 +430,17 @@ export default function AccretionDisk() {
             const nx = dx / dist, ny = dy / dist;
             const rel = relVx * nx + relVy * ny;
             if (rel < 0) {
-              const impulse = (2 * rel) / (a.mass + b.mass);
+              // restitution < 1: a touch this close is realistically
+              // dissipative (surface friction, debris, deformation), so
+              // bleed a little relative speed on every bounce rather than
+              // reflecting it perfectly. On its own this only shrinks a
+              // locked orbit's radial wobble — it's the widened grazeThreshold
+              // above that actually lets a decayed, near-circular contact
+              // qualify as headOn and merge; this just makes that decay
+              // happen faster and keeps a normal energetic bounce from
+              // being perfectly, unrealistically elastic.
+              const restitution = 0.85;
+              const impulse = ((1 + restitution) * rel) / (a.mass + b.mass);
               a.vx += impulse * b.mass * nx; a.vy += impulse * b.mass * ny;
               b.vx -= impulse * a.mass * nx; b.vy -= impulse * a.mass * ny;
             }
