@@ -71,16 +71,28 @@ export default function AccretionDisk() {
   const pointerRef = useRef({ x: null, y: null, active: false });
   const [pointerMassOn, setPointerMassOn] = useState(false);
   const [spawningOn, setSpawningOn] = useState(true);
-  const [count, setCount] = useState(0);
-  const [starCount, setStarCount] = useState(0);
-  const [dwarfCount, setDwarfCount] = useState(0);
-  const [hottest, setHottest] = useState(0);
-  const [cleared, setCleared] = useState(0);
-  const [topMass, setTopMass] = useState(0);
-  const [energyDrift, setEnergyDrift] = useState(0);
-  const [angMomDrift, setAngMomDrift] = useState(0);
   const [trails, setTrails] = useState(true);
   const [speed, setSpeed] = useState(1);
+  // All the per-frame readout numbers (population, masses, drift, ...) are
+  // collapsed into one state object updated at most 10x/sec — see
+  // statsRef below. They used to be 8 separate setState calls fired every
+  // animation frame (~60/sec), which was the prime suspect for the mobile
+  // freeze: that's up to 480 React re-renders/sec of the header for values
+  // nobody can perceive changing faster than a few times a second anyway.
+  const [stats, setStats] = useState({
+    count: 0,
+    starCount: 0,
+    dwarfCount: 0,
+    hottest: 0,
+    cleared: 0,
+    topMass: 0,
+    energyDrift: 0,
+    angMomDrift: 0,
+  });
+  // Live values the physics loop writes to every frame without touching
+  // React state. A separate low-frequency interval (below) copies this
+  // into `stats` for rendering.
+  const statsRef = useRef(stats);
   const trailsRef = useRef(trails);
   const pointerMassRef = useRef(pointerMassOn);
   const speedRef = useRef(speed);
@@ -180,7 +192,8 @@ export default function AccretionDisk() {
 
     const seedTotalMass = N * 3.5;
     bodiesRef.current = Array.from({ length: N }, () => spawnBody(seedTotalMass));
-    setCount(N);
+    statsRef.current = { ...statsRef.current, count: N };
+    setStats((s) => ({ ...s, count: N }));
 
     const flashes = [];
     let clearing = false; // starts ramping once a star first ignites
@@ -289,7 +302,6 @@ export default function AccretionDisk() {
       // used in planetesimal accretion models
       const removed = new Set();
       const spawned = [];
-      const totalMassNow = bodies.reduce((s, b) => s + b.mass, 0);
 
       for (let i = 0; i < bodies.length; i++) {
         if (removed.has(i)) continue;
@@ -417,14 +429,18 @@ export default function AccretionDisk() {
       // wrapping it back in, and replace it with a fresh comet drifting
       // in from the edge so the population doesn't just drain away
       const maxR = diskRadius() * 1.35;
+      // hoisted out of the loop below: `bodies` itself isn't mutated by
+      // marking indices in `removed`, so this was previously being
+      // recomputed (same O(n) reduce, same result) once per escapee
+      // instead of once per frame
+      const totalMassForEscapees = bodies.reduce((s, b) => s + b.mass, 0);
       for (let i = 0; i < bodies.length; i++) {
         if (removed.has(i)) continue;
         const a = bodies[i];
         const dx = a.x - cx, dy = a.y - cy;
         if (dx * dx + dy * dy > maxR * maxR) {
           removed.add(i);
-          const totalMassNow = bodies.reduce((s, b) => s + b.mass, 0);
-          spawned.push(spawnBody(totalMassNow, "comet"));
+          spawned.push(spawnBody(totalMassForEscapees, "comet"));
         }
       }
 
@@ -440,13 +456,23 @@ export default function AccretionDisk() {
         bodiesRef.current = bodies;
       }
 
-      setCount(bodies.length);
-      setStarCount(bodies.filter((b) => b.mass >= HYDROGEN_MASS).length);
-      setDwarfCount(bodies.filter((b) => b.mass >= DEUTERIUM_MASS && b.mass < HYDROGEN_MASS).length);
-      const maxMass = bodies.reduce((m, b) => Math.max(m, b.mass), 0);
-      setHottest(coreTemp(maxMass));
-      setCleared(clearProgress);
-      setTopMass(maxMass);
+      // single pass instead of two .filter().length calls plus a
+      // .reduce() — same result, three fewer array allocations per frame
+      let starCountNow = 0, dwarfCountNow = 0, maxMass = 0;
+      for (const b of bodies) {
+        if (b.mass >= HYDROGEN_MASS) starCountNow++;
+        else if (b.mass >= DEUTERIUM_MASS) dwarfCountNow++;
+        if (b.mass > maxMass) maxMass = b.mass;
+      }
+      // write-only: no setState here, so this doesn't trigger a re-render.
+      // A low-frequency interval (below) copies these into `stats`.
+      const liveStats = statsRef.current;
+      liveStats.count = bodies.length;
+      liveStats.starCount = starCountNow;
+      liveStats.dwarfCount = dwarfCountNow;
+      liveStats.hottest = coreTemp(maxMass);
+      liveStats.cleared = clearProgress;
+      liveStats.topMass = maxMass;
 
       // conservation check: total energy and angular momentum should stay
       // roughly constant for an isolated system — this isn't a fully
@@ -473,8 +499,8 @@ export default function AccretionDisk() {
         const totalEnergy = KE + PE;
         if (baselineEnergy === null) { baselineEnergy = totalEnergy; baselineAngMom = AM; }
         else {
-          setEnergyDrift(baselineEnergy !== 0 ? ((totalEnergy - baselineEnergy) / Math.abs(baselineEnergy)) * 100 : 0);
-          setAngMomDrift(baselineAngMom !== 0 ? ((AM - baselineAngMom) / Math.abs(baselineAngMom)) * 100 : 0);
+          statsRef.current.energyDrift = baselineEnergy !== 0 ? ((totalEnergy - baselineEnergy) / Math.abs(baselineEnergy)) * 100 : 0;
+          statsRef.current.angMomDrift = baselineAngMom !== 0 ? ((AM - baselineAngMom) / Math.abs(baselineAngMom)) * 100 : 0;
         }
       }
 
@@ -560,6 +586,14 @@ export default function AccretionDisk() {
       bodiesRef.current = bodies.concat(additions);
     }, 1000);
 
+    // decoupled from the animation loop on purpose: this is the only place
+    // the readout numbers actually reach React state, at 10/sec instead of
+    // ~60/sec. Nobody can read a number changing faster than this anyway,
+    // and it turns ~60 header re-renders/sec into ~10.
+    const statsPushInterval = setInterval(() => {
+      setStats({ ...statsRef.current });
+    }, 100);
+
     function setPointer(x, y, active) {
       const rect = canvas.getBoundingClientRect();
       pointerRef.current = { x: x - rect.left, y: y - rect.top, active };
@@ -587,6 +621,7 @@ export default function AccretionDisk() {
       canvas.removeEventListener("touchstart", onTouchMove);
       cancelAnimationFrame(animRef.current);
       clearInterval(spawnInterval);
+      clearInterval(statsPushInterval);
     };
   }, []);
 
@@ -596,10 +631,10 @@ export default function AccretionDisk() {
         <div>
           <div style={styles.title}>Accretion Disk</div>
           <div style={styles.subtitle}>
-            {count} bodies · largest {topMass.toFixed(1)} M♃ · {dwarfCount} brown dwarf{dwarfCount === 1 ? "" : "s"} ·{" "}
-            {starCount} star{starCount === 1 ? "" : "s"} · hottest core ~{(hottest / 1e6).toFixed(2)}M K
-            {cleared > 0 ? ` · gas ${cleared >= 1 ? "cleared" : Math.round(cleared * 100) + "% cleared"}` : ""}
-            {" · "}ΔE {energyDrift.toFixed(1)}% · ΔL {angMomDrift.toFixed(1)}%
+            {stats.count} bodies · largest {stats.topMass.toFixed(1)} M♃ · {stats.dwarfCount} brown dwarf{stats.dwarfCount === 1 ? "" : "s"} ·{" "}
+            {stats.starCount} star{stats.starCount === 1 ? "" : "s"} · hottest core ~{(stats.hottest / 1e6).toFixed(2)}M K
+            {stats.cleared > 0 ? ` · gas ${stats.cleared >= 1 ? "cleared" : Math.round(stats.cleared * 100) + "% cleared"}` : ""}
+            {" · "}ΔE {stats.energyDrift.toFixed(1)}% · ΔL {stats.angMomDrift.toFixed(1)}%
           </div>
         </div>
         <div style={styles.buttons}>
