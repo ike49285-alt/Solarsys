@@ -7276,12 +7276,50 @@
     }
   });
 
+  // node_modules/react/cjs/react-jsx-runtime.production.min.js
+  var require_react_jsx_runtime_production_min = __commonJS({
+    "node_modules/react/cjs/react-jsx-runtime.production.min.js"(exports) {
+      "use strict";
+      var f = require_react();
+      var k = /* @__PURE__ */ Symbol.for("react.element");
+      var l = /* @__PURE__ */ Symbol.for("react.fragment");
+      var m = Object.prototype.hasOwnProperty;
+      var n = f.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentOwner;
+      var p = { key: true, ref: true, __self: true, __source: true };
+      function q(c, a, g) {
+        var b, d = {}, e = null, h = null;
+        void 0 !== g && (e = "" + g);
+        void 0 !== a.key && (e = "" + a.key);
+        void 0 !== a.ref && (h = a.ref);
+        for (b in a) m.call(a, b) && !p.hasOwnProperty(b) && (d[b] = a[b]);
+        if (c && c.defaultProps) for (b in a = c.defaultProps, a) void 0 === d[b] && (d[b] = a[b]);
+        return { $$typeof: k, type: c, key: e, ref: h, props: d, _owner: n.current };
+      }
+      exports.Fragment = l;
+      exports.jsx = q;
+      exports.jsxs = q;
+    }
+  });
+
+  // node_modules/react/jsx-runtime.js
+  var require_jsx_runtime = __commonJS({
+    "node_modules/react/jsx-runtime.js"(exports, module) {
+      "use strict";
+      if (true) {
+        module.exports = require_react_jsx_runtime_production_min();
+      } else {
+        module.exports = null;
+      }
+    }
+  });
+
   // entry.jsx
   var import_react2 = __toESM(require_react());
   var import_client = __toESM(require_client());
 
   // accretion-disk.jsx
   var import_react = __toESM(require_react());
+  var import_jsx_runtime = __toESM(require_jsx_runtime());
   var G_SI = 6674e-14;
   var M_JUP_KG = 1898e24;
   var R_JUP_M = 69911e3;
@@ -7745,37 +7783,76 @@
         clearInterval(statsPushInterval);
       };
     }, []);
-    return /* @__PURE__ */ React.createElement("div", { style: styles.wrap }, /* @__PURE__ */ React.createElement("div", { style: styles.header }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: styles.title }, "Accretion Disk"), /* @__PURE__ */ React.createElement("div", { style: styles.subtitle }, stats.count, " bodies \xB7 largest ", stats.topMass.toFixed(1), " M\u2643 \xB7 ", stats.dwarfCount, " brown dwarf", stats.dwarfCount === 1 ? "" : "s", " \xB7", " ", stats.starCount, " star", stats.starCount === 1 ? "" : "s", " \xB7 hottest core ~", (stats.hottest / 1e6).toFixed(2), "M K", stats.cleared > 0 ? ` \xB7 gas ${stats.cleared >= 1 ? "cleared" : Math.round(stats.cleared * 100) + "% cleared"}` : "", " \xB7 ", "\u0394E ", stats.energyDrift.toFixed(1), "% \xB7 \u0394L ", stats.angMomDrift.toFixed(1), "%")), /* @__PURE__ */ React.createElement("div", { style: styles.buttons }, /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        style: { ...styles.toggle, background: spawningOn ? "#7dd3fc" : "#2a2b3d", color: spawningOn ? "#0a0a14" : "#8b8ca8" },
-        onClick: () => setSpawningOn((v) => !v)
-      },
-      spawningOn ? "Spawning on" : "Spawning off"
-    ), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        style: { ...styles.toggle, background: pointerMassOn ? "#a78bfa" : "#2a2b3d", color: pointerMassOn ? "#0a0a14" : "#8b8ca8" },
-        onClick: () => setPointerMassOn((v) => !v)
-      },
-      pointerMassOn ? "Cursor gravity on" : "Cursor gravity off"
-    ), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        style: { ...styles.toggle, background: trails ? "#34d399" : "#2a2b3d", color: trails ? "#0a0a14" : "#8b8ca8" },
-        onClick: () => setTrails((v) => !v)
-      },
-      trails ? "Trails on" : "Trails off"
-    ), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        style: { ...styles.toggle, background: "#2a2b3d", color: "#8b8ca8" },
-        onClick: () => setSpeed((s) => s >= 2 ? 0.5 : s + 0.5)
-      },
-      "Speed ",
-      speed,
-      "x"
-    ))), /* @__PURE__ */ React.createElement("canvas", { ref: canvasRef, style: styles.canvas }));
+    return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: styles.wrap, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: styles.header, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: styles.title, children: "Accretion Disk" }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: styles.subtitle, children: [
+            stats.count,
+            " bodies \xB7 largest ",
+            stats.topMass.toFixed(1),
+            " M\u2643 \xB7 ",
+            stats.dwarfCount,
+            " brown dwarf",
+            stats.dwarfCount === 1 ? "" : "s",
+            " \xB7",
+            " ",
+            stats.starCount,
+            " star",
+            stats.starCount === 1 ? "" : "s",
+            " \xB7 hottest core ~",
+            (stats.hottest / 1e6).toFixed(2),
+            "M K",
+            stats.cleared > 0 ? ` \xB7 gas ${stats.cleared >= 1 ? "cleared" : Math.round(stats.cleared * 100) + "% cleared"}` : "",
+            " \xB7 ",
+            "\u0394E ",
+            stats.energyDrift.toFixed(1),
+            "% \xB7 \u0394L ",
+            stats.angMomDrift.toFixed(1),
+            "%"
+          ] })
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: styles.buttons, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+            "button",
+            {
+              style: { ...styles.toggle, background: spawningOn ? "#7dd3fc" : "#2a2b3d", color: spawningOn ? "#0a0a14" : "#8b8ca8" },
+              onClick: () => setSpawningOn((v) => !v),
+              children: spawningOn ? "Spawning on" : "Spawning off"
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+            "button",
+            {
+              style: { ...styles.toggle, background: pointerMassOn ? "#a78bfa" : "#2a2b3d", color: pointerMassOn ? "#0a0a14" : "#8b8ca8" },
+              onClick: () => setPointerMassOn((v) => !v),
+              children: pointerMassOn ? "Cursor gravity on" : "Cursor gravity off"
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+            "button",
+            {
+              style: { ...styles.toggle, background: trails ? "#34d399" : "#2a2b3d", color: trails ? "#0a0a14" : "#8b8ca8" },
+              onClick: () => setTrails((v) => !v),
+              children: trails ? "Trails on" : "Trails off"
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+            "button",
+            {
+              style: { ...styles.toggle, background: "#2a2b3d", color: "#8b8ca8" },
+              onClick: () => setSpeed((s) => s >= 2 ? 0.5 : s + 0.5),
+              children: [
+                "Speed ",
+                speed,
+                "x"
+              ]
+            }
+          )
+        ] })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("canvas", { ref: canvasRef, style: styles.canvas })
+    ] });
   }
   var styles = {
     wrap: { width: "100%", height: "100vh", background: "#060710", display: "flex", flexDirection: "column", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", overflow: "hidden" },
@@ -7788,8 +7865,9 @@
   };
 
   // entry.jsx
+  var import_jsx_runtime2 = __toESM(require_jsx_runtime());
   var root = (0, import_client.createRoot)(document.getElementById("root"));
-  root.render(/* @__PURE__ */ import_react2.default.createElement(AccretionDisk, null));
+  root.render(/* @__PURE__ */ (0, import_jsx_runtime2.jsx)(AccretionDisk, {}));
 })();
 /*! Bundled license information:
 
@@ -7819,6 +7897,17 @@ react-dom/cjs/react-dom.production.min.js:
   (**
    * @license React
    * react-dom.production.min.js
+   *
+   * Copyright (c) Facebook, Inc. and its affiliates.
+   *
+   * This source code is licensed under the MIT license found in the
+   * LICENSE file in the root directory of this source tree.
+   *)
+
+react/cjs/react-jsx-runtime.production.min.js:
+  (**
+   * @license React
+   * react-jsx-runtime.production.min.js
    *
    * Copyright (c) Facebook, Inc. and its affiliates.
    *
