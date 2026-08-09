@@ -272,12 +272,23 @@ export default function AccretionDisk() {
       };
     }
 
+    // how many frames a freshly ejected fragment is exempt from being
+    // picked as the "smaller" party in a NEW tidal disruption check —
+    // belt-and-suspenders alongside the outward-ejection fix above: even
+    // if some future case still drops a fragment somewhere it shouldn't
+    // be, this caps how many times in a row it can happen, the same
+    // "hard ceiling regardless of cause" philosophy as MAX_BODIES. Once
+    // immune, the pair falls through to the ordinary merge/bounce check
+    // instead, using the distance/speed already computed for it.
+    const TIDAL_IMMUNITY_FRAMES = 30;
+
     // A small chunk of debris thrown outward from `parent` (a real body,
     // or a synthetic {x,y,vx,vy,r} standing in for a merger's combined
     // point) at `angle`/`speed` relative to it. Shared by every violent
     // event that sheds mass as fragments instead of retaining it all:
-    // tidal disruption, a white dwarf's planetary-nebula puff, core-
-    // collapse supernova ejecta, and Type Ia disruption.
+    // a white dwarf's planetary-nebula puff, core-collapse supernova
+    // ejecta, and Type Ia disruption (tidal disruption spawns its own
+    // fragments inline, just below, since it needs the parent's color).
     function spawnEjecta(parent, angle, speed, mass) {
       return {
         x: parent.x + Math.cos(angle) * (parent.r || 4) * 0.5,
@@ -287,6 +298,7 @@ export default function AccretionDisk() {
         mass,
         r: bodyRadius(mass),
         color: rockPalette[Math.floor(Math.random() * rockPalette.length)],
+        tidalImmuneUntil: frameCount + TIDAL_IMMUNITY_FRAMES,
       };
     }
 
@@ -460,7 +472,12 @@ export default function AccretionDisk() {
           const bigger = a.mass >= b.mass ? a : b;
           const smaller = a.mass >= b.mass ? b : a;
           const smallerIsI = a.mass < b.mass;
-          if (bigger.mass > smaller.mass * 9) {
+          // a body still on its post-ejection immunity window skips
+          // straight past tidal disruption for this pair and falls
+          // through to the ordinary merge/bounce check below instead —
+          // see TIDAL_IMMUNITY_FRAMES above
+          const tidalEligible = !(smaller.tidalImmuneUntil > frameCount);
+          if (tidalEligible && bigger.mass > smaller.mass * 9) {
             const densBig = bigger.mass / (bigger.r * bigger.r * bigger.r);
             const densSmall = smaller.mass / (smaller.r * smaller.r * smaller.r);
             const rocheLimit = 2.44 * bigger.r * Math.cbrt(densBig / densSmall);
@@ -498,6 +515,7 @@ export default function AccretionDisk() {
                   mass: fragMass,
                   r: bodyRadius(fragMass),
                   color: smaller.color,
+                  tidalImmuneUntil: frameCount + TIDAL_IMMUNITY_FRAMES,
                 });
               }
               flashes.push({ x: smaller.x, y: smaller.y, age: 0, kind: "tidal" });

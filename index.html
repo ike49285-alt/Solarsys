@@ -7481,6 +7481,7 @@
           color: rockPalette[Math.floor(Math.random() * rockPalette.length)]
         };
       }
+      const TIDAL_IMMUNITY_FRAMES = 30;
       function spawnEjecta(parent, angle, speed2, mass) {
         return {
           x: parent.x + Math.cos(angle) * (parent.r || 4) * 0.5,
@@ -7489,7 +7490,8 @@
           vy: parent.vy + Math.sin(angle) * speed2,
           mass,
           r: bodyRadius(mass),
-          color: rockPalette[Math.floor(Math.random() * rockPalette.length)]
+          color: rockPalette[Math.floor(Math.random() * rockPalette.length)],
+          tidalImmuneUntil: frameCount + TIDAL_IMMUNITY_FRAMES
         };
       }
       const seedTotalMass = N * 3.5;
@@ -7590,7 +7592,8 @@
             const bigger = a.mass >= b.mass ? a : b;
             const smaller = a.mass >= b.mass ? b : a;
             const smallerIsI = a.mass < b.mass;
-            if (bigger.mass > smaller.mass * 9) {
+            const tidalEligible = !(smaller.tidalImmuneUntil > frameCount);
+            if (tidalEligible && bigger.mass > smaller.mass * 9) {
               const densBig = bigger.mass / (bigger.r * bigger.r * bigger.r);
               const densSmall = smaller.mass / (smaller.r * smaller.r * smaller.r);
               const rocheLimit = 2.44 * bigger.r * Math.cbrt(densBig / densSmall);
@@ -7610,7 +7613,8 @@
                     vy: smaller.vy + Math.sin(ang) * jitter,
                     mass: fragMass,
                     r: bodyRadius(fragMass),
-                    color: smaller.color
+                    color: smaller.color,
+                    tidalImmuneUntil: frameCount + TIDAL_IMMUNITY_FRAMES
                   });
                 }
                 flashes.push({ x: smaller.x, y: smaller.y, age: 0, kind: "tidal" });
