@@ -7327,11 +7327,29 @@
   var DEUTERIUM_MASS = 13;
   var HYDROGEN_MASS = 80;
   var GOAL_POPULATION = 100;
+  var SUPERNOVA_MASS = 220;
+  var SN_REMNANT_FRACTION = 0.15;
+  var WHITE_DWARF_FRACTION = 0.4;
+  var CHANDRASEKHAR_MASS = 95;
+  var TOV_MASS = 40;
+  var STAR_BASE_LIFESPAN = 240;
   var PLATEAU_R = Math.cbrt(DEUTERIUM_MASS) * 1.9;
   function bodyRadius(mass) {
     if (mass < DEUTERIUM_MASS) return Math.cbrt(mass) * 1.9;
     if (mass < HYDROGEN_MASS) return PLATEAU_R;
     return PLATEAU_R * Math.pow(mass / HYDROGEN_MASS, 0.8);
+  }
+  var WD_RADIUS_COEFF = 7;
+  function whiteDwarfRadius(mass) {
+    return WD_RADIUS_COEFF / Math.cbrt(mass);
+  }
+  var NEUTRON_STAR_RADIUS = 1.8;
+  var BH_RADIUS_COEFF = 0.12;
+  function blackHoleRadius(mass) {
+    return BH_RADIUS_COEFF * mass;
+  }
+  function starLifespanSeconds(mass) {
+    return STAR_BASE_LIFESPAN * Math.pow(mass / HYDROGEN_MASS, -2.5);
   }
   var T_COEFF = 0.4 * G_SI * M_JUP_KG * M_H_KG / (K_B * R_JUP_M);
   function coreTemp(massInJupiterMasses) {
@@ -7363,6 +7381,9 @@
       count: 0,
       starCount: 0,
       dwarfCount: 0,
+      whiteDwarfCount: 0,
+      neutronStarCount: 0,
+      blackHoleCount: 0,
       hottest: 0,
       cleared: 0,
       topMass: 0,
@@ -7395,6 +7416,15 @@
       const G = 0.02;
       const SOFTEN = 14;
       const N = 100;
+      const FLASH_STYLES = {
+        star: { span: 42, rgb: "255,224,138", spread: 62, width: 3 },
+        dwarf: { span: 26, rgb: "182,72,108", spread: 30, width: 2 },
+        tidal: { span: 20, rgb: "220,225,235", spread: 18, width: 2 },
+        whiteDwarf: { span: 30, rgb: "220,225,255", spread: 22, width: 2 },
+        supernova: { span: 70, rgb: "255,241,214", spread: 100, width: 4 },
+        typeIa: { span: 80, rgb: "214,225,255", spread: 110, width: 4 },
+        collapse: { span: 22, rgb: "200,200,220", spread: 14, width: 2 }
+      };
       function resize() {
         dpr = Math.min(window.devicePixelRatio || 1, 2);
         width = canvas.clientWidth;
@@ -7433,14 +7463,30 @@
           const snowBoost = r > snowLineRadius() ? 2.6 : 1;
           const baseMass = 1 + Math.random() * Math.random() * 5;
           mass = baseMass * densityFactor * snowBoost;
-          tangentialFrac = 0.6 + Math.random() * 0.6;
-          inwardFrac = mode === "edge" ? 0.12 : 0;
+          if (mode === void 0) {
+            tangentialFrac = (0.3 + Math.random() * 1.4) * (Math.random() < 0.85 ? 1 : -1);
+            inwardFrac = (Math.random() - 0.5) * 1.2;
+          } else {
+            tangentialFrac = 0.6 + Math.random() * 0.6;
+            inwardFrac = mode === "edge" ? 0.12 : 0;
+          }
         }
         return {
           x,
           y,
           vx: tx * vCirc * tangentialFrac - Math.cos(angle) * vCirc * inwardFrac,
           vy: ty * vCirc * tangentialFrac - Math.sin(angle) * vCirc * inwardFrac,
+          mass,
+          r: bodyRadius(mass),
+          color: rockPalette[Math.floor(Math.random() * rockPalette.length)]
+        };
+      }
+      function spawnEjecta(parent, angle, speed2, mass) {
+        return {
+          x: parent.x + Math.cos(angle) * (parent.r || 4) * 0.5,
+          y: parent.y + Math.sin(angle) * (parent.r || 4) * 0.5,
+          vx: parent.vx + Math.cos(angle) * speed2,
+          vy: parent.vy + Math.sin(angle) * speed2,
           mass,
           r: bodyRadius(mass),
           color: rockPalette[Math.floor(Math.random() * rockPalette.length)]
@@ -7576,25 +7622,60 @@
               const violence = relSpeed / escapeV;
               const lossFraction = 0.2 * violence * violence;
               const totalMass = rawTotal * (1 - lossFraction);
-              const priorMax = Math.max(a.mass, b.mass);
-              const justHydrogen = totalMass >= HYDROGEN_MASS && priorMax < HYDROGEN_MASS;
-              const justDeuterium = !justHydrogen && totalMass >= DEUTERIUM_MASS && priorMax < DEUTERIUM_MASS;
-              const merged = {
-                x: (a.x * a.mass + b.x * b.mass) / rawTotal,
-                y: (a.y * a.mass + b.y * b.mass) / rawTotal,
-                vx: (a.vx * a.mass + b.vx * b.mass) / rawTotal,
-                vy: (a.vy * a.mass + b.vy * b.mass) / rawTotal,
-                mass: totalMass,
-                r: bodyRadius(totalMass),
-                color: totalMass >= HYDROGEN_MASS ? `rgb(${starRGB(totalMass).join(",")})` : totalMass >= DEUTERIUM_MASS ? DWARF_COLOR : a.mass >= b.mass ? a.color : b.color
-              };
+              const mx = (a.x * a.mass + b.x * b.mass) / rawTotal;
+              const my = (a.y * a.mass + b.y * b.mass) / rawTotal;
+              const mvx = (a.vx * a.mass + b.vx * b.mass) / rawTotal;
+              const mvy = (a.vy * a.mass + b.vy * b.mass) / rawTotal;
               removed.add(i);
               removed.add(j);
-              if (justHydrogen) {
-                flashes.push({ x: merged.x, y: merged.y, age: 0, kind: "star" });
-                clearing = true;
-              } else if (justDeuterium) flashes.push({ x: merged.x, y: merged.y, age: 0, kind: "dwarf" });
-              spawned.push(merged);
+              const eitherIsNS = a.remnant === "neutronStar" || b.remnant === "neutronStar";
+              const eitherIsBH = a.remnant === "blackHole" || b.remnant === "blackHole";
+              const remnantType = eitherIsBH || eitherIsNS ? eitherIsBH || totalMass > TOV_MASS ? "blackHole" : "neutronStar" : a.remnant || b.remnant ? "whiteDwarf" : null;
+              if (remnantType === "whiteDwarf" && totalMass > CHANDRASEKHAR_MASS) {
+                const blastCenter = { x: mx, y: my, vx: mvx, vy: mvy, r: Math.max(a.r, b.r) };
+                const fragCount = bodies.length + spawned.length - removed.size < MAX_BODIES - 6 ? 8 : 3;
+                for (let k = 0; k < fragCount; k++) {
+                  const ang = Math.random() * Math.PI * 2;
+                  const blast = 1.4 * Math.sqrt(G * totalMass / blastCenter.r);
+                  spawned.push(spawnEjecta(blastCenter, ang, blast, totalMass / fragCount));
+                }
+                flashes.push({ x: mx, y: my, age: 0, kind: "typeIa" });
+              } else if (remnantType) {
+                const wasAlreadyThatType = a.remnant === remnantType || b.remnant === remnantType;
+                spawned.push({
+                  x: mx,
+                  y: my,
+                  vx: mvx,
+                  vy: mvy,
+                  mass: totalMass,
+                  r: remnantType === "blackHole" ? blackHoleRadius(totalMass) : remnantType === "neutronStar" ? NEUTRON_STAR_RADIUS : whiteDwarfRadius(totalMass),
+                  remnant: remnantType,
+                  color: remnantType === "blackHole" ? "#000000" : remnantType === "neutronStar" ? "#eafcff" : "#eef2ff"
+                });
+                if (!wasAlreadyThatType) flashes.push({ x: mx, y: my, age: 0, kind: "collapse" });
+              } else {
+                const priorMax = Math.max(a.mass, b.mass);
+                const justHydrogen = totalMass >= HYDROGEN_MASS && priorMax < HYDROGEN_MASS;
+                const justDeuterium = !justHydrogen && totalMass >= DEUTERIUM_MASS && priorMax < DEUTERIUM_MASS;
+                const merged = {
+                  x: mx,
+                  y: my,
+                  vx: mvx,
+                  vy: mvy,
+                  mass: totalMass,
+                  r: bodyRadius(totalMass),
+                  color: totalMass >= HYDROGEN_MASS ? `rgb(${starRGB(totalMass).join(",")})` : totalMass >= DEUTERIUM_MASS ? DWARF_COLOR : a.mass >= b.mass ? a.color : b.color,
+                  // a star's age carries over from whichever parent was
+                  // already burning (an ordinary merger just adds fuel to
+                  // an existing star); a brand-new ignition starts at 0
+                  age: totalMass >= HYDROGEN_MASS ? justHydrogen ? 0 : (a.mass >= HYDROGEN_MASS ? a.age : b.mass >= HYDROGEN_MASS ? b.age : 0) || 0 : void 0
+                };
+                if (justHydrogen) {
+                  flashes.push({ x: merged.x, y: merged.y, age: 0, kind: "star" });
+                  clearing = true;
+                } else if (justDeuterium) flashes.push({ x: merged.x, y: merged.y, age: 0, kind: "dwarf" });
+                spawned.push(merged);
+              }
               break;
             } else if (dist < a.r + b.r) {
               const nx = dx / dist, ny = dy / dist;
@@ -7613,6 +7694,55 @@
               b.x += nx * overlap / 2;
               b.y += ny * overlap / 2;
             }
+          }
+        }
+        for (let i = 0; i < bodies.length; i++) {
+          if (removed.has(i)) continue;
+          const a = bodies[i];
+          if (a.remnant || a.mass < HYDROGEN_MASS) continue;
+          a.age = (a.age || 0) + dt / 60;
+          if (a.age < starLifespanSeconds(a.mass)) continue;
+          removed.add(i);
+          if (a.mass < SUPERNOVA_MASS) {
+            const remnantMass = a.mass * WHITE_DWARF_FRACTION;
+            spawned.push({
+              x: a.x,
+              y: a.y,
+              vx: a.vx,
+              vy: a.vy,
+              mass: remnantMass,
+              r: whiteDwarfRadius(remnantMass),
+              remnant: "whiteDwarf",
+              color: "#eef2ff"
+            });
+            const puffMass = (a.mass - remnantMass) / 3;
+            for (let k = 0; k < 3; k++) {
+              const ang = Math.random() * Math.PI * 2;
+              const puffSpeed = 0.2 * Math.sqrt(G * a.mass / a.r);
+              spawned.push(spawnEjecta(a, ang, puffSpeed, puffMass));
+            }
+            flashes.push({ x: a.x, y: a.y, age: 0, kind: "whiteDwarf" });
+          } else {
+            const remnantMass = a.mass * SN_REMNANT_FRACTION;
+            const isBlackHole = remnantMass > TOV_MASS;
+            spawned.push({
+              x: a.x,
+              y: a.y,
+              vx: a.vx,
+              vy: a.vy,
+              mass: remnantMass,
+              r: isBlackHole ? blackHoleRadius(remnantMass) : NEUTRON_STAR_RADIUS,
+              remnant: isBlackHole ? "blackHole" : "neutronStar",
+              color: isBlackHole ? "#000000" : "#eafcff"
+            });
+            const ejectaMass = a.mass - remnantMass;
+            const fragCount = bodies.length + spawned.length - removed.size < MAX_BODIES - 8 ? 8 : 3;
+            for (let k = 0; k < fragCount; k++) {
+              const ang = Math.random() * Math.PI * 2;
+              const blast = 1.3 * Math.sqrt(G * a.mass / a.r);
+              spawned.push(spawnEjecta(a, ang, blast, ejectaMass / fragCount));
+            }
+            flashes.push({ x: a.x, y: a.y, age: 0, kind: "supernova" });
           }
         }
         const maxR = diskRadius() * 1.35;
@@ -7635,8 +7765,12 @@
           bodiesRef.current = bodies;
         }
         let starCountNow = 0, dwarfCountNow = 0, maxMass = 0;
+        let whiteDwarfCountNow = 0, neutronStarCountNow = 0, blackHoleCountNow = 0;
         for (const b of bodies) {
-          if (b.mass >= HYDROGEN_MASS) starCountNow++;
+          if (b.remnant === "whiteDwarf") whiteDwarfCountNow++;
+          else if (b.remnant === "neutronStar") neutronStarCountNow++;
+          else if (b.remnant === "blackHole") blackHoleCountNow++;
+          else if (b.mass >= HYDROGEN_MASS) starCountNow++;
           else if (b.mass >= DEUTERIUM_MASS) dwarfCountNow++;
           if (b.mass > maxMass) maxMass = b.mass;
         }
@@ -7644,11 +7778,14 @@
         liveStats.count = bodies.length;
         liveStats.starCount = starCountNow;
         liveStats.dwarfCount = dwarfCountNow;
+        liveStats.whiteDwarfCount = whiteDwarfCountNow;
+        liveStats.neutronStarCount = neutronStarCountNow;
+        liveStats.blackHoleCount = blackHoleCountNow;
         liveStats.hottest = coreTemp(maxMass);
         liveStats.cleared = clearProgress;
         liveStats.topMass = maxMass;
         frameCount++;
-        if (frameCount % 15 === 0) {
+        if (frameCount > 300 && frameCount % 15 === 0) {
           let KE = 0, PE = 0, AM = 0;
           for (const b of bodies) {
             KE += 0.5 * b.mass * (b.vx * b.vx + b.vy * b.vy);
@@ -7690,6 +7827,50 @@
         }
         for (const a of bodies) {
           const sx = a.x, sy = a.y;
+          ctx.globalAlpha = 1;
+          if (a.remnant === "blackHole") {
+            ctx.beginPath();
+            ctx.fillStyle = "#000000";
+            ctx.arc(sx, sy, a.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.strokeStyle = "rgba(255, 235, 200, 0.85)";
+            ctx.lineWidth = Math.max(1, a.r * 0.15);
+            ctx.arc(sx, sy, a.r, 0, Math.PI * 2);
+            ctx.stroke();
+            continue;
+          }
+          if (a.remnant === "neutronStar") {
+            const pulse = 0.5 + 0.5 * Math.sin(frameCount * 0.35 + sx);
+            const glowR = a.r * 6;
+            const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, glowR);
+            glow.addColorStop(0, `rgba(220, 245, 255, ${0.55 * pulse})`);
+            glow.addColorStop(1, "rgba(220, 245, 255, 0)");
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.fillStyle = "#eafcff";
+            ctx.arc(sx, sy, a.r, 0, Math.PI * 2);
+            ctx.fill();
+            continue;
+          }
+          if (a.remnant === "whiteDwarf") {
+            const glowR = a.r * 3;
+            const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, glowR);
+            glow.addColorStop(0, "rgba(238, 242, 255, 0.4)");
+            glow.addColorStop(1, "rgba(238, 242, 255, 0)");
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.fillStyle = "#eef2ff";
+            ctx.arc(sx, sy, a.r, 0, Math.PI * 2);
+            ctx.fill();
+            continue;
+          }
           if (a.mass >= DEUTERIUM_MASS) {
             const isStar = a.mass >= HYDROGEN_MASS;
             const glowColor = isStar ? starRGB(a.mass).join(", ") : "182, 72, 108";
@@ -7712,18 +7893,16 @@
         for (let i = flashes.length - 1; i >= 0; i--) {
           const f = flashes[i];
           f.age += 1;
-          const span = f.kind === "star" ? 42 : f.kind === "tidal" ? 20 : 26;
-          const t = f.age / span;
+          const style = FLASH_STYLES[f.kind] || FLASH_STYLES.dwarf;
+          const t = f.age / style.span;
           if (t >= 1) {
             flashes.splice(i, 1);
             continue;
           }
-          const rgb = f.kind === "star" ? "255,224,138" : f.kind === "tidal" ? "220,225,235" : "182,72,108";
           ctx.beginPath();
-          ctx.strokeStyle = `rgba(${rgb},${1 - t})`;
-          ctx.lineWidth = f.kind === "star" ? 3 : 2;
-          const maxSpread = f.kind === "star" ? 62 : f.kind === "tidal" ? 18 : 30;
-          ctx.arc(f.x, f.y, 5 + t * maxSpread, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${style.rgb},${1 - t})`;
+          ctx.lineWidth = style.width;
+          ctx.arc(f.x, f.y, 5 + t * style.spread, 0, Math.PI * 2);
           ctx.stroke();
         }
         if (pointerActive) {
@@ -7784,6 +7963,11 @@
         clearInterval(statsPushInterval);
       };
     }, []);
+    const remnantParts = [
+      stats.whiteDwarfCount > 0 ? `${stats.whiteDwarfCount} white dwarf${stats.whiteDwarfCount === 1 ? "" : "s"}` : null,
+      stats.neutronStarCount > 0 ? `${stats.neutronStarCount} neutron star${stats.neutronStarCount === 1 ? "" : "s"}` : null,
+      stats.blackHoleCount > 0 ? `${stats.blackHoleCount} black hole${stats.blackHoleCount === 1 ? "" : "s"}` : null
+    ].filter(Boolean).join(" \xB7 ");
     return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: styles.wrap, children: [
       /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: styles.header, children: [
         /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
@@ -7805,6 +7989,7 @@
             (stats.hottest / 1e6).toFixed(2),
             "M K",
             stats.cleared > 0 ? ` \xB7 gas ${stats.cleared >= 1 ? "cleared" : Math.round(stats.cleared * 100) + "% cleared"}` : "",
+            remnantParts ? ` \xB7 ${remnantParts}` : "",
             " \xB7 ",
             "\u0394E ",
             stats.energyDrift.toFixed(1),

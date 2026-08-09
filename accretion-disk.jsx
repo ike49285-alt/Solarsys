@@ -14,6 +14,22 @@ const DEUTERIUM_MASS = 13;
 const HYDROGEN_MASS = 80;
 const GOAL_POPULATION = 100; // target body count when spawning is on
 
+// Stellar death thresholds. A real core-collapse supernova needs a
+// progenitor above ~8 solar masses (~8,400 M_Jup) — completely out of
+// reach of this sim's actual mass budget (a full disk starts around only
+// ~350 M_Jup total, hard-capped at 130 bodies). Rather than fake the
+// literal numbers, these are stylized thresholds in the same spirit as
+// the sim's existing time compression: real ORDER preserved (only an
+// unusually massive star goes supernova; only the most massive of those
+// leaves a black hole instead of a neutron star), values rescaled to be
+// reachable through play and to resolve within a session.
+const SUPERNOVA_MASS = 220; // stylized "~8 solar mass" line
+const SN_REMNANT_FRACTION = 0.15; // core collapse leaves ~10-20% of the progenitor behind, real ballpark
+const WHITE_DWARF_FRACTION = 0.4; // envelope loss leaves ~40% behind as a white dwarf, real ballpark
+const CHANDRASEKHAR_MASS = 95; // stylized "~1.4 solar mass" line — a white dwarf pushed past this (accretion OR merger) goes Type Ia
+const TOV_MASS = 40; // stylized "~2.5 solar mass" line (Tolman-Oppenheimer-Volkoff) — the neutron-star/black-hole boundary
+const STAR_BASE_LIFESPAN = 240; // seconds a star right at HYDROGEN_MASS lives before it dies
+
 // Mass-radius relation, piecewise by real regime. Below the deuterium line,
 // bodies are constant-density rock/ice (R ∝ M^(1/3)). Between deuterium and
 // hydrogen ignition, real substellar objects are held up by electron
@@ -27,6 +43,38 @@ function bodyRadius(mass) {
   if (mass < DEUTERIUM_MASS) return Math.cbrt(mass) * 1.9;
   if (mass < HYDROGEN_MASS) return PLATEAU_R;
   return PLATEAU_R * Math.pow(mass / HYDROGEN_MASS, 0.8);
+}
+
+// Compact-remnant mass-radius relations — three real, genuinely different
+// laws, a nice contrast with the single law above:
+//  - white dwarf: electron degeneracy pressure again, but for the WHOLE
+//    object now, not just a plateau — real white dwarfs get SMALLER as
+//    they get MORE massive (R ∝ M^-1/3), the opposite of everything else
+//    in this sim.
+//  - neutron star: neutron degeneracy pressure holds radius almost
+//    perfectly flat (~10km) across the real neutron-star mass range —
+//    modeled here as a genuine constant, not just a plateau.
+//  - black hole: the Schwarzschild radius is exactly linear in mass
+//    (R ∝ M) — no pressure holds it up at all, gravity simply wins.
+const WD_RADIUS_COEFF = 7;
+function whiteDwarfRadius(mass) {
+  return WD_RADIUS_COEFF / Math.cbrt(mass);
+}
+const NEUTRON_STAR_RADIUS = 1.8;
+const BH_RADIUS_COEFF = 0.12; // stylized for visibility — a real Schwarzschild radius at these masses would be far too small to render on a canvas at all
+function blackHoleRadius(mass) {
+  return BH_RADIUS_COEFF * mass;
+}
+
+// Main-sequence lifetime: real luminosity scales L ∝ M^3.5, so lifetime
+// (fuel / burn rate) scales t ∝ M/L ∝ M^-2.5 — a star twice as massive
+// lives roughly 1/6th as long, a real and important astrophysical fact.
+// Calibrated so a star right at the hydrogen line lives minutes of
+// sim-time, while a monster built from repeated mergers burns out in
+// seconds — the same "real shape, rescaled timescale" compromise the sim
+// already makes for orbital speeds.
+function starLifespanSeconds(mass) {
+  return STAR_BASE_LIFESPAN * Math.pow(mass / HYDROGEN_MASS, -2.5);
 }
 
 // Virial-theorem estimate of core temperature for a self-gravitating,
@@ -83,6 +131,9 @@ export default function AccretionDisk() {
     count: 0,
     starCount: 0,
     dwarfCount: 0,
+    whiteDwarfCount: 0,
+    neutronStarCount: 0,
+    blackHoleCount: 0,
     hottest: 0,
     cleared: 0,
     topMass: 0,
@@ -113,6 +164,20 @@ export default function AccretionDisk() {
     const G = 0.02; // scaled, not SI — see note below
     const SOFTEN = 14;
     const N = 100;
+
+    // { span: how many frames it lives, rgb: color, spread: how far the
+    // ring expands, width: line thickness } — one entry per flash kind,
+    // in place of a growing chain of ternaries as new event types (below)
+    // add new kinds.
+    const FLASH_STYLES = {
+      star: { span: 42, rgb: "255,224,138", spread: 62, width: 3 },
+      dwarf: { span: 26, rgb: "182,72,108", spread: 30, width: 2 },
+      tidal: { span: 20, rgb: "220,225,235", spread: 18, width: 2 },
+      whiteDwarf: { span: 30, rgb: "220,225,255", spread: 22, width: 2 },
+      supernova: { span: 70, rgb: "255,241,214", spread: 100, width: 4 },
+      typeIa: { span: 80, rgb: "214,225,255", spread: 110, width: 4 },
+      collapse: { span: 22, rgb: "200,200,220", spread: 14, width: 2 },
+    };
 
     // NOTE ON UNITS: dynamics run in scaled sim units (screen pixels, frames)
     // so the whole thing plays out in real time on a canvas — literal SI
@@ -176,14 +241,49 @@ export default function AccretionDisk() {
         const snowBoost = r > snowLineRadius() ? 2.6 : 1;
         const baseMass = 1 + Math.random() * Math.random() * 5;
         mass = baseMass * densityFactor * snowBoost;
-        tangentialFrac = 0.6 + Math.random() * 0.6;
-        inwardFrac = mode === "edge" ? 0.12 : 0;
+        if (mode === undefined) {
+          // nebula collapse, thin version: the initial cloud isn't
+          // already an orderly disk. A real protoplanetary disk forms
+          // when a turbulent, roughly spherical collapsing cloud's
+          // angular momentum flattens it (the "figure skater pulling
+          // their arms in" effect). This sim has no z-axis to flatten
+          // along, so the 2D stand-in is: seed genuinely turbulent
+          // velocities — a wide spread, mostly but not uniformly
+          // prograde, real radial motion too — instead of tidy circular
+          // orbits, and let the gas-drag term below do the actual
+          // circularizing over the opening several seconds. Same
+          // dissipation mechanism as the real flattening, just visualized
+          // as chaos-settling-into-order in-plane rather than in 3D.
+          tangentialFrac = (0.3 + Math.random() * 1.4) * (Math.random() < 0.85 ? 1 : -1);
+          inwardFrac = (Math.random() - 0.5) * 1.2;
+        } else {
+          tangentialFrac = 0.6 + Math.random() * 0.6;
+          inwardFrac = mode === "edge" ? 0.12 : 0;
+        }
       }
 
       return {
         x, y,
         vx: tx * vCirc * tangentialFrac - Math.cos(angle) * vCirc * inwardFrac,
         vy: ty * vCirc * tangentialFrac - Math.sin(angle) * vCirc * inwardFrac,
+        mass,
+        r: bodyRadius(mass),
+        color: rockPalette[Math.floor(Math.random() * rockPalette.length)],
+      };
+    }
+
+    // A small chunk of debris thrown outward from `parent` (a real body,
+    // or a synthetic {x,y,vx,vy,r} standing in for a merger's combined
+    // point) at `angle`/`speed` relative to it. Shared by every violent
+    // event that sheds mass as fragments instead of retaining it all:
+    // tidal disruption, a white dwarf's planetary-nebula puff, core-
+    // collapse supernova ejecta, and Type Ia disruption.
+    function spawnEjecta(parent, angle, speed, mass) {
+      return {
+        x: parent.x + Math.cos(angle) * (parent.r || 4) * 0.5,
+        y: parent.y + Math.sin(angle) * (parent.r || 4) * 0.5,
+        vx: parent.vx + Math.cos(angle) * speed,
+        vy: parent.vy + Math.sin(angle) * speed,
         mass,
         r: bodyRadius(mass),
         color: rockPalette[Math.floor(Math.random() * rockPalette.length)],
@@ -402,26 +502,87 @@ export default function AccretionDisk() {
             const violence = relSpeed / escapeV;
             const lossFraction = 0.2 * violence * violence;
             const totalMass = rawTotal * (1 - lossFraction);
-            const priorMax = Math.max(a.mass, b.mass);
-            const justHydrogen = totalMass >= HYDROGEN_MASS && priorMax < HYDROGEN_MASS;
-            const justDeuterium = !justHydrogen && totalMass >= DEUTERIUM_MASS && priorMax < DEUTERIUM_MASS;
-
-            const merged = {
-              x: (a.x * a.mass + b.x * b.mass) / rawTotal,
-              y: (a.y * a.mass + b.y * b.mass) / rawTotal,
-              vx: (a.vx * a.mass + b.vx * b.mass) / rawTotal,
-              vy: (a.vy * a.mass + b.vy * b.mass) / rawTotal,
-              mass: totalMass,
-              r: bodyRadius(totalMass),
-              color:
-                totalMass >= HYDROGEN_MASS ? `rgb(${starRGB(totalMass).join(",")})` :
-                totalMass >= DEUTERIUM_MASS ? DWARF_COLOR :
-                a.mass >= b.mass ? a.color : b.color,
-            };
+            const mx = (a.x * a.mass + b.x * b.mass) / rawTotal;
+            const my = (a.y * a.mass + b.y * b.mass) / rawTotal;
+            const mvx = (a.vx * a.mass + b.vx * b.mass) / rawTotal;
+            const mvy = (a.vy * a.mass + b.vy * b.mass) / rawTotal;
             removed.add(i); removed.add(j);
-            if (justHydrogen) { flashes.push({ x: merged.x, y: merged.y, age: 0, kind: "star" }); clearing = true; }
-            else if (justDeuterium) flashes.push({ x: merged.x, y: merged.y, age: 0, kind: "dwarf" });
-            spawned.push(merged);
+
+            // if either party is already a compact remnant, its fate
+            // isn't decided by the ordinary planetesimal mass-radius
+            // relation anymore — it's decided by the SAME thresholds a
+            // remnant is born under (see the stellar-death pass below),
+            // just re-applied to the merged mass. A neutron star or black
+            // hole merger is real astrophysics too — it's exactly what
+            // LIGO's gravitational-wave detections are.
+            // TOV_MASS is the neutron-degenerate ceiling and only means
+            // anything once a neutron star (or black hole) is actually
+            // involved — it must NOT gate a pure white-dwarf merger, whose
+            // own, much-lower electron-degenerate ceiling is
+            // CHANDRASEKHAR_MASS, checked separately below. Confirmed via
+            // an instrumented test run that getting this gating wrong
+            // makes ordinary white-dwarf mergers misclassify as black
+            // holes, and the mislabeling then cascades through later,
+            // unrelated mergers touching that same body.
+            const eitherIsNS = a.remnant === "neutronStar" || b.remnant === "neutronStar";
+            const eitherIsBH = a.remnant === "blackHole" || b.remnant === "blackHole";
+            const remnantType = eitherIsBH || eitherIsNS ? (eitherIsBH || totalMass > TOV_MASS ? "blackHole" : "neutronStar")
+              : (a.remnant || b.remnant) ? "whiteDwarf" // only remnant left is whiteDwarf
+              : null;
+
+            if (remnantType === "whiteDwarf" && totalMass > CHANDRASEKHAR_MASS) {
+              // Type Ia supernova: a white dwarf pushed over the
+              // Chandrasekhar-equivalent limit — whether by merging with
+              // another white dwarf (double-degenerate) or by consuming
+              // enough ordinary matter (single-degenerate, the real
+              // mechanism this instant full-merger case stands in for) —
+              // detonates completely. Unlike core collapse, there's no
+              // compact remnant left behind at all.
+              const blastCenter = { x: mx, y: my, vx: mvx, vy: mvy, r: Math.max(a.r, b.r) };
+              const fragCount = bodies.length + spawned.length - removed.size < MAX_BODIES - 6 ? 8 : 3;
+              for (let k = 0; k < fragCount; k++) {
+                const ang = Math.random() * Math.PI * 2;
+                const blast = 1.4 * Math.sqrt((G * totalMass) / blastCenter.r);
+                spawned.push(spawnEjecta(blastCenter, ang, blast, totalMass / fragCount));
+              }
+              flashes.push({ x: mx, y: my, age: 0, kind: "typeIa" });
+            } else if (remnantType) {
+              const wasAlreadyThatType = a.remnant === remnantType || b.remnant === remnantType;
+              spawned.push({
+                x: mx, y: my, vx: mvx, vy: mvy,
+                mass: totalMass,
+                r: remnantType === "blackHole" ? blackHoleRadius(totalMass)
+                   : remnantType === "neutronStar" ? NEUTRON_STAR_RADIUS
+                   : whiteDwarfRadius(totalMass),
+                remnant: remnantType,
+                color: remnantType === "blackHole" ? "#000000" : remnantType === "neutronStar" ? "#eafcff" : "#eef2ff",
+              });
+              // only flash on an actual collapse to a NEW, denser type —
+              // not on an ordinary same-type remnant just gaining mass
+              if (!wasAlreadyThatType) flashes.push({ x: mx, y: my, age: 0, kind: "collapse" });
+            } else {
+              const priorMax = Math.max(a.mass, b.mass);
+              const justHydrogen = totalMass >= HYDROGEN_MASS && priorMax < HYDROGEN_MASS;
+              const justDeuterium = !justHydrogen && totalMass >= DEUTERIUM_MASS && priorMax < DEUTERIUM_MASS;
+              const merged = {
+                x: mx, y: my, vx: mvx, vy: mvy,
+                mass: totalMass,
+                r: bodyRadius(totalMass),
+                color:
+                  totalMass >= HYDROGEN_MASS ? `rgb(${starRGB(totalMass).join(",")})` :
+                  totalMass >= DEUTERIUM_MASS ? DWARF_COLOR :
+                  a.mass >= b.mass ? a.color : b.color,
+                // a star's age carries over from whichever parent was
+                // already burning (an ordinary merger just adds fuel to
+                // an existing star); a brand-new ignition starts at 0
+                age: totalMass >= HYDROGEN_MASS
+                  ? (justHydrogen ? 0 : (a.mass >= HYDROGEN_MASS ? a.age : b.mass >= HYDROGEN_MASS ? b.age : 0) || 0)
+                  : undefined,
+              };
+              if (justHydrogen) { flashes.push({ x: merged.x, y: merged.y, age: 0, kind: "star" }); clearing = true; }
+              else if (justDeuterium) flashes.push({ x: merged.x, y: merged.y, age: 0, kind: "dwarf" });
+              spawned.push(merged);
+            }
             break;
           } else if (dist < a.r + b.r) {
             // only a genuine physical touch bounces — a fast flyby that's
@@ -448,6 +609,59 @@ export default function AccretionDisk() {
             a.x -= (nx * overlap) / 2; a.y -= (ny * overlap) / 2;
             b.x += (nx * overlap) / 2; b.y += (ny * overlap) / 2;
           }
+        }
+      }
+
+      // stellar death: once a star's accumulated `age` exceeds its scaled
+      // main-sequence lifespan (starLifespanSeconds — real L ∝ M^3.5 ⇒
+      // lifespan ∝ M^-2.5), it ends. Below SUPERNOVA_MASS: a quiet white
+      // dwarf, envelope shed as a slow "planetary nebula" puff. At or
+      // above it: a real core-collapse supernova, most of the mass blown
+      // out violently, and a remnant left behind whose fate — neutron
+      // star or black hole — is decided by whether ITS OWN mass clears
+      // TOV_MASS, mirroring the real threshold exactly.
+      for (let i = 0; i < bodies.length; i++) {
+        if (removed.has(i)) continue;
+        const a = bodies[i];
+        if (a.remnant || a.mass < HYDROGEN_MASS) continue;
+        a.age = (a.age || 0) + dt / 60;
+        if (a.age < starLifespanSeconds(a.mass)) continue;
+
+        removed.add(i);
+        if (a.mass < SUPERNOVA_MASS) {
+          const remnantMass = a.mass * WHITE_DWARF_FRACTION;
+          spawned.push({
+            x: a.x, y: a.y, vx: a.vx, vy: a.vy,
+            mass: remnantMass,
+            r: whiteDwarfRadius(remnantMass),
+            remnant: "whiteDwarf",
+            color: "#eef2ff",
+          });
+          const puffMass = (a.mass - remnantMass) / 3;
+          for (let k = 0; k < 3; k++) {
+            const ang = Math.random() * Math.PI * 2;
+            const puffSpeed = 0.2 * Math.sqrt((G * a.mass) / a.r);
+            spawned.push(spawnEjecta(a, ang, puffSpeed, puffMass));
+          }
+          flashes.push({ x: a.x, y: a.y, age: 0, kind: "whiteDwarf" });
+        } else {
+          const remnantMass = a.mass * SN_REMNANT_FRACTION;
+          const isBlackHole = remnantMass > TOV_MASS;
+          spawned.push({
+            x: a.x, y: a.y, vx: a.vx, vy: a.vy,
+            mass: remnantMass,
+            r: isBlackHole ? blackHoleRadius(remnantMass) : NEUTRON_STAR_RADIUS,
+            remnant: isBlackHole ? "blackHole" : "neutronStar",
+            color: isBlackHole ? "#000000" : "#eafcff",
+          });
+          const ejectaMass = a.mass - remnantMass;
+          const fragCount = bodies.length + spawned.length - removed.size < MAX_BODIES - 8 ? 8 : 3;
+          for (let k = 0; k < fragCount; k++) {
+            const ang = Math.random() * Math.PI * 2;
+            const blast = 1.3 * Math.sqrt((G * a.mass) / a.r);
+            spawned.push(spawnEjecta(a, ang, blast, ejectaMass / fragCount));
+          }
+          flashes.push({ x: a.x, y: a.y, age: 0, kind: "supernova" });
         }
       }
 
@@ -486,8 +700,12 @@ export default function AccretionDisk() {
       // single pass instead of two .filter().length calls plus a
       // .reduce() — same result, three fewer array allocations per frame
       let starCountNow = 0, dwarfCountNow = 0, maxMass = 0;
+      let whiteDwarfCountNow = 0, neutronStarCountNow = 0, blackHoleCountNow = 0;
       for (const b of bodies) {
-        if (b.mass >= HYDROGEN_MASS) starCountNow++;
+        if (b.remnant === "whiteDwarf") whiteDwarfCountNow++;
+        else if (b.remnant === "neutronStar") neutronStarCountNow++;
+        else if (b.remnant === "blackHole") blackHoleCountNow++;
+        else if (b.mass >= HYDROGEN_MASS) starCountNow++;
         else if (b.mass >= DEUTERIUM_MASS) dwarfCountNow++;
         if (b.mass > maxMass) maxMass = b.mass;
       }
@@ -497,6 +715,9 @@ export default function AccretionDisk() {
       liveStats.count = bodies.length;
       liveStats.starCount = starCountNow;
       liveStats.dwarfCount = dwarfCountNow;
+      liveStats.whiteDwarfCount = whiteDwarfCountNow;
+      liveStats.neutronStarCount = neutronStarCountNow;
+      liveStats.blackHoleCount = blackHoleCountNow;
       liveStats.hottest = coreTemp(maxMass);
       liveStats.cleared = clearProgress;
       liveStats.topMass = maxMass;
@@ -508,8 +729,14 @@ export default function AccretionDisk() {
       // mass/momentum entering and leaving, not just integrator error.
       // Wild, sudden jumps would flag an actual bug; slow drift here is
       // mostly the system being open, not the integrator failing.
+      // Baseline is captured after ~5s, not immediately — the nebula's
+      // turbulent opening seconds are SUPPOSED to bleed a lot of kinetic
+      // energy via gas drag as they settle into a disk (that's the actual
+      // mechanism this sim's 2D nebula-collapse stand-in relies on), so
+      // measuring from frame 1 would read as ~90% "drift" that's really
+      // just the intended settling, not an integrator problem.
       frameCount++;
-      if (frameCount % 15 === 0) {
+      if (frameCount > 300 && frameCount % 15 === 0) {
         let KE = 0, PE = 0, AM = 0;
         for (const b of bodies) {
           KE += 0.5 * b.mass * (b.vx * b.vx + b.vy * b.vy);
@@ -550,6 +777,58 @@ export default function AccretionDisk() {
 
       for (const a of bodies) {
         const sx = a.x, sy = a.y;
+        ctx.globalAlpha = 1; // reset every body: a remnant draw below doesn't set 0.92 like the normal path does, and alpha otherwise leaks across iterations
+        if (a.remnant === "blackHole") {
+          // absorbs light rather than emitting it — the opposite of every
+          // other glow here — with a thin bright photon-ring rim, the
+          // cheapest real nod to what the Event Horizon Telescope
+          // actually imaged around a real black hole
+          ctx.beginPath();
+          ctx.fillStyle = "#000000";
+          ctx.arc(sx, sy, a.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.strokeStyle = "rgba(255, 235, 200, 0.85)";
+          ctx.lineWidth = Math.max(1, a.r * 0.15);
+          ctx.arc(sx, sy, a.r, 0, Math.PI * 2);
+          ctx.stroke();
+          continue;
+        }
+        if (a.remnant === "neutronStar") {
+          // pulsar flavor: real neutron stars are DISCOVERED by this
+          // exact periodic brightness sweep, not just decorated with one.
+          // Phase offset by position so multiple neutron stars don't all
+          // pulse in lockstep.
+          const pulse = 0.5 + 0.5 * Math.sin(frameCount * 0.35 + sx);
+          const glowR = a.r * 6;
+          const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, glowR);
+          glow.addColorStop(0, `rgba(220, 245, 255, ${0.55 * pulse})`);
+          glow.addColorStop(1, "rgba(220, 245, 255, 0)");
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.fillStyle = "#eafcff";
+          ctx.arc(sx, sy, a.r, 0, Math.PI * 2);
+          ctx.fill();
+          continue;
+        }
+        if (a.remnant === "whiteDwarf") {
+          const glowR = a.r * 3;
+          const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, glowR);
+          glow.addColorStop(0, "rgba(238, 242, 255, 0.4)");
+          glow.addColorStop(1, "rgba(238, 242, 255, 0)");
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.fillStyle = "#eef2ff";
+          ctx.arc(sx, sy, a.r, 0, Math.PI * 2);
+          ctx.fill();
+          continue;
+        }
         if (a.mass >= DEUTERIUM_MASS) {
           const isStar = a.mass >= HYDROGEN_MASS;
           const glowColor = isStar ? starRGB(a.mass).join(", ") : "182, 72, 108";
@@ -573,15 +852,13 @@ export default function AccretionDisk() {
       for (let i = flashes.length - 1; i >= 0; i--) {
         const f = flashes[i];
         f.age += 1;
-        const span = f.kind === "star" ? 42 : f.kind === "tidal" ? 20 : 26;
-        const t = f.age / span;
+        const style = FLASH_STYLES[f.kind] || FLASH_STYLES.dwarf;
+        const t = f.age / style.span;
         if (t >= 1) { flashes.splice(i, 1); continue; }
-        const rgb = f.kind === "star" ? "255,224,138" : f.kind === "tidal" ? "220,225,235" : "182,72,108";
         ctx.beginPath();
-        ctx.strokeStyle = `rgba(${rgb},${1 - t})`;
-        ctx.lineWidth = f.kind === "star" ? 3 : 2;
-        const maxSpread = f.kind === "star" ? 62 : f.kind === "tidal" ? 18 : 30;
-        ctx.arc(f.x, f.y, 5 + t * maxSpread, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(${style.rgb},${1 - t})`;
+        ctx.lineWidth = style.width;
+        ctx.arc(f.x, f.y, 5 + t * style.spread, 0, Math.PI * 2);
         ctx.stroke();
       }
 
@@ -652,6 +929,15 @@ export default function AccretionDisk() {
     };
   }, []);
 
+  // remnants only show up in the readout once they exist — same pattern
+  // as "gas cleared" below, no point cluttering the header with "0 white
+  // dwarfs" before the sim's first star has even died
+  const remnantParts = [
+    stats.whiteDwarfCount > 0 ? `${stats.whiteDwarfCount} white dwarf${stats.whiteDwarfCount === 1 ? "" : "s"}` : null,
+    stats.neutronStarCount > 0 ? `${stats.neutronStarCount} neutron star${stats.neutronStarCount === 1 ? "" : "s"}` : null,
+    stats.blackHoleCount > 0 ? `${stats.blackHoleCount} black hole${stats.blackHoleCount === 1 ? "" : "s"}` : null,
+  ].filter(Boolean).join(" · ");
+
   return (
     <div style={styles.wrap}>
       <div style={styles.header}>
@@ -661,6 +947,7 @@ export default function AccretionDisk() {
             {stats.count} bodies · largest {stats.topMass.toFixed(1)} M♃ · {stats.dwarfCount} brown dwarf{stats.dwarfCount === 1 ? "" : "s"} ·{" "}
             {stats.starCount} star{stats.starCount === 1 ? "" : "s"} · hottest core ~{(stats.hottest / 1e6).toFixed(2)}M K
             {stats.cleared > 0 ? ` · gas ${stats.cleared >= 1 ? "cleared" : Math.round(stats.cleared * 100) + "% cleared"}` : ""}
+            {remnantParts ? ` · ${remnantParts}` : ""}
             {" · "}ΔE {stats.energyDrift.toFixed(1)}% · ΔL {stats.angMomDrift.toFixed(1)}%
           </div>
         </div>
