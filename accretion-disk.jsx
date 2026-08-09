@@ -524,15 +524,35 @@ export default function AccretionDisk() {
             }
           }
 
-          if (relSpeed < escapeV && headOn) {
+          // Stars and black holes have no rigid surface to bounce off
+          // of — the headOn/escape-velocity hit-and-run model above is
+          // built for two solid bodies grazing past each other, which
+          // isn't physically meaningful for a body that actually reaches
+          // a star's photosphere or a black hole's event horizon. Real
+          // sun-grazing comets that touch the photosphere are vaporized,
+          // not deflected; nothing that touches an event horizon escapes
+          // it, elastically or otherwise (tidal disruption, above,
+          // already covers the "torn apart before contact" case at
+          // greater range — this is what happens once contact is real).
+          // So any physical touch against an already-ignited star or a
+          // black hole is absorbed unconditionally, bypassing the
+          // geometry/speed nuance that's appropriate for rock-on-rock.
+          const absorptive = bigger.remnant === "blackHole" || bigger.mass >= HYDROGEN_MASS;
+          const forcedAbsorb = absorptive && dist < a.r + b.r;
+
+          if ((relSpeed < escapeV && headOn) || forcedAbsorb) {
             const rawTotal = a.mass + b.mass;
             // even accreting impacts eject some debris rather than
             // retaining every bit of mass — real giant-impact simulations
             // show more ejecta the closer the impact speed runs to the
             // escape-velocity threshold (a gentle graze loses ~nothing; a
-            // hit just barely slow enough to stick loses the most)
+            // hit just barely slow enough to stick loses the most).
+            // Forced absorption skips this entirely: an event horizon
+            // keeps everything that crosses it, and a full swallow into
+            // a star's photosphere isn't a grazing impact either — both
+            // are complete, lossless captures.
             const violence = relSpeed / escapeV;
-            const lossFraction = 0.2 * violence * violence;
+            const lossFraction = forcedAbsorb ? 0 : 0.2 * violence * violence;
             const totalMass = rawTotal * (1 - lossFraction);
             const mx = (a.x * a.mass + b.x * b.mass) / rawTotal;
             const my = (a.y * a.mass + b.y * b.mass) / rawTotal;

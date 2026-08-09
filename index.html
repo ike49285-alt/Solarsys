@@ -7622,10 +7622,12 @@
                 else continue;
               }
             }
-            if (relSpeed < escapeV && headOn) {
+            const absorptive = bigger.remnant === "blackHole" || bigger.mass >= HYDROGEN_MASS;
+            const forcedAbsorb = absorptive && dist < a.r + b.r;
+            if (relSpeed < escapeV && headOn || forcedAbsorb) {
               const rawTotal = a.mass + b.mass;
               const violence = relSpeed / escapeV;
-              const lossFraction = 0.2 * violence * violence;
+              const lossFraction = forcedAbsorb ? 0 : 0.2 * violence * violence;
               const totalMass = rawTotal * (1 - lossFraction);
               const mx = (a.x * a.mass + b.x * b.mass) / rawTotal;
               const my = (a.y * a.mass + b.y * b.mass) / rawTotal;
