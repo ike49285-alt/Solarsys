@@ -7369,8 +7369,13 @@
   function starRGB(mass) {
     return blackbodyRGB(surfaceTemp(mass));
   }
+  function hexToRgb(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return `${n >> 16 & 255}, ${n >> 8 & 255}, ${n & 255}`;
+  }
   function AccretionDisk() {
     const canvasRef = (0, import_react.useRef)(null);
+    const densityCanvasRef = (0, import_react.useRef)(null);
     const bodiesRef = (0, import_react.useRef)([]);
     const pointerRef = (0, import_react.useRef)({ x: null, y: null, active: false });
     const [pointerMassOn, setPointerMassOn] = (0, import_react.useState)(false);
@@ -7410,6 +7415,8 @@
     (0, import_react.useEffect)(() => {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
+      const densityCanvas = densityCanvasRef.current;
+      const densityCtx = densityCanvas.getContext("2d");
       let width, height, dpr, cx, cy;
       const rockPalette = ["#7dd3fc", "#a78bfa", "#f472b6", "#fbbf24", "#34d399"];
       const DWARF_COLOR = "#b6486c";
@@ -7432,6 +7439,9 @@
         canvas.width = width * dpr;
         canvas.height = height * dpr;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        densityCanvas.width = width * dpr;
+        densityCanvas.height = height * dpr;
+        densityCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         cx = width / 2;
         cy = height / 2;
       }
@@ -7535,8 +7545,12 @@
       }
       function step() {
         const dt = speedRef.current;
-        ctx.fillStyle = trailsRef.current ? "rgba(6, 7, 16, 0.16)" : "#060710";
+        densityCtx.fillStyle = "rgba(6, 7, 16, 0.004)";
+        densityCtx.fillRect(0, 0, width, height);
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.fillStyle = trailsRef.current ? "rgba(0, 0, 0, 0.16)" : "rgba(0, 0, 0, 1)";
         ctx.fillRect(0, 0, width, height);
+        ctx.globalCompositeOperation = "source-over";
         let bodies = bodiesRef.current;
         const p = pointerRef.current;
         const pointerActive = pointerMassRef.current && p.active;
@@ -7834,6 +7848,11 @@
         }
         for (const a of bodies) {
           const sx = a.x, sy = a.y;
+          const densityColor = a.remnant === "blackHole" ? "255, 235, 200" : a.remnant === "neutronStar" ? "220, 245, 255" : a.remnant === "whiteDwarf" ? "238, 242, 255" : a.mass >= HYDROGEN_MASS ? starRGB(a.mass).join(", ") : a.mass >= DEUTERIUM_MASS ? "182, 72, 108" : hexToRgb(a.color);
+          densityCtx.beginPath();
+          densityCtx.fillStyle = `rgba(${densityColor}, 0.12)`;
+          densityCtx.arc(sx, sy, Math.max(1, a.r * 0.7), 0, Math.PI * 2);
+          densityCtx.fill();
           ctx.globalAlpha = 1;
           if (a.remnant === "blackHole") {
             ctx.beginPath();
@@ -8044,7 +8063,10 @@
           )
         ] })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("canvas", { ref: canvasRef, style: styles.canvas })
+      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: styles.canvasWrap, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("canvas", { ref: densityCanvasRef, style: { ...styles.canvasLayer, pointerEvents: "none" } }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("canvas", { ref: canvasRef, style: { ...styles.canvasLayer, touchAction: "none" } })
+      ] })
     ] });
   }
   var styles = {
@@ -8054,7 +8076,8 @@
     subtitle: { fontSize: 12, color: "#8b8ca8", marginTop: 2 },
     buttons: { display: "flex", gap: 8 },
     toggle: { border: "none", borderRadius: 999, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
-    canvas: { flex: 1, width: "100%", touchAction: "none" }
+    canvasWrap: { flex: 1, width: "100%", position: "relative" },
+    canvasLayer: { position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }
   };
 
   // entry.jsx
