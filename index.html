@@ -7593,6 +7593,7 @@
         if (clearing) clearProgress = Math.min(1, clearProgress + dt / (60 * CLEAR_SECONDS));
         const removed = /* @__PURE__ */ new Set();
         const spawned = [];
+        const trailWipes = [];
         for (let i = 0; i < bodies.length; i++) {
           if (removed.has(i)) continue;
           const a = bodies[i];
@@ -7621,6 +7622,7 @@
               if (dist < rocheLimit && dist > bigger.r) {
                 const shredIdx = smallerIsI ? i : j;
                 removed.add(shredIdx);
+                trailWipes.push({ x: smaller.x, y: smaller.y, r: smaller.r });
                 const fragCount = bodies.length + spawned.length - removed.size < MAX_BODIES ? 2 : 1;
                 const fragMass = smaller.mass / fragCount;
                 const outwardAngle = Math.atan2(smaller.y - bigger.y, smaller.x - bigger.x);
@@ -7656,6 +7658,7 @@
               const mvy = (a.vy * a.mass + b.vy * b.mass) / rawTotal;
               removed.add(i);
               removed.add(j);
+              trailWipes.push({ x: a.x, y: a.y, r: a.r }, { x: b.x, y: b.y, r: b.r });
               const eitherIsNS = a.remnant === "neutronStar" || b.remnant === "neutronStar";
               const eitherIsBH = a.remnant === "blackHole" || b.remnant === "blackHole";
               const remnantType = eitherIsBH || eitherIsNS ? eitherIsBH || totalMass > TOV_MASS ? "blackHole" : "neutronStar" : a.remnant || b.remnant ? "whiteDwarf" : null;
@@ -7731,6 +7734,7 @@
           a.age = (a.age || 0) + dt / 60;
           if (a.age < starLifespanSeconds(a.mass)) continue;
           removed.add(i);
+          trailWipes.push({ x: a.x, y: a.y, r: a.r });
           if (a.mass < SUPERNOVA_MASS) {
             const remnantMass = a.mass * WHITE_DWARF_FRACTION;
             spawned.push({
@@ -7772,6 +7776,14 @@
             }
             flashes.push({ x: a.x, y: a.y, age: 0, kind: "supernova" });
           }
+        }
+        for (const w of trailWipes) {
+          densityCtx.globalCompositeOperation = "destination-out";
+          densityCtx.fillStyle = "rgba(0, 0, 0, 0.5)";
+          densityCtx.beginPath();
+          densityCtx.arc(w.x, w.y, Math.max(6, w.r * 3), 0, Math.PI * 2);
+          densityCtx.fill();
+          densityCtx.globalCompositeOperation = "source-over";
         }
         const maxR = diskRadius() * 1.35;
         for (let i = 0; i < bodies.length; i++) {

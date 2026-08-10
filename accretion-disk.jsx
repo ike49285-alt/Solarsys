@@ -476,6 +476,13 @@ export default function AccretionDisk() {
       // used in planetesimal accretion models
       const removed = new Set();
       const spawned = [];
+      // every point where something is actually destroyed this frame
+      // (shredded, merged away, absorbed, or a star at the end of its
+      // life) — collected so the density trail can be locally cleared
+      // faster than its normal slow fade right where each one happened,
+      // separate from the flash effects (which only fire for dramatic
+      // threshold crossings, not routine mergers)
+      const trailWipes = [];
 
       for (let i = 0; i < bodies.length; i++) {
         if (removed.has(i)) continue;
@@ -546,6 +553,7 @@ export default function AccretionDisk() {
             if (dist < rocheLimit && dist > bigger.r) {
               const shredIdx = smallerIsI ? i : j;
               removed.add(shredIdx);
+              trailWipes.push({ x: smaller.x, y: smaller.y, r: smaller.r });
               // spawn at most 2 fragments (net +1 body) even though a
               // real shredding event scatters more debris than that —
               // capped so this can't be the mechanism that runs the
@@ -621,6 +629,7 @@ export default function AccretionDisk() {
             const mvx = (a.vx * a.mass + b.vx * b.mass) / rawTotal;
             const mvy = (a.vy * a.mass + b.vy * b.mass) / rawTotal;
             removed.add(i); removed.add(j);
+            trailWipes.push({ x: a.x, y: a.y, r: a.r }, { x: b.x, y: b.y, r: b.r });
 
             // if either party is already a compact remnant, its fate
             // isn't decided by the ordinary planetesimal mass-radius
@@ -742,6 +751,7 @@ export default function AccretionDisk() {
         if (a.age < starLifespanSeconds(a.mass)) continue;
 
         removed.add(i);
+        trailWipes.push({ x: a.x, y: a.y, r: a.r });
         if (a.mass < SUPERNOVA_MASS) {
           const remnantMass = a.mass * WHITE_DWARF_FRACTION;
           spawned.push({
@@ -777,6 +787,24 @@ export default function AccretionDisk() {
           }
           flashes.push({ x: a.x, y: a.y, age: 0, kind: "supernova" });
         }
+      }
+
+      // a destroyed body's OWN slice of the density trail clears fast
+      // here, rather than lingering at the same slow decay as an
+      // actively-orbiting path — the trail is a record of where
+      // something has been, and once it's gone that record shouldn't
+      // keep reading as "this is still a busy lane." Only the area right
+      // at the destruction site clears (there's no history of the
+      // body's full path kept to erase, just where it currently was),
+      // but that's exactly where a merge/shred/absorb's own flash draws
+      // the eye anyway, so the two effects read as one event.
+      for (const w of trailWipes) {
+        densityCtx.globalCompositeOperation = "destination-out";
+        densityCtx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        densityCtx.beginPath();
+        densityCtx.arc(w.x, w.y, Math.max(6, w.r * 3), 0, Math.PI * 2);
+        densityCtx.fill();
+        densityCtx.globalCompositeOperation = "source-over";
       }
 
       // a body flung past the disk edge has exceeded the system's escape
