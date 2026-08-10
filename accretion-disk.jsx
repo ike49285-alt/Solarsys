@@ -768,22 +768,39 @@ export default function AccretionDisk() {
       }
 
       // a body flung past the disk edge has exceeded the system's escape
-      // velocity — let it actually leave, rather than artificially
-      // wrapping it back in, and replace it with a fresh comet drifting
-      // in from the edge so the population doesn't just drain away
+      // velocity. This used to remove it and spawn a fresh comet in its
+      // place — but yanking a body's mass out of the system entirely,
+      // discontinuously, jerks the barycenter (recomputed every frame,
+      // below) hard enough to visibly destabilize the whole rendered
+      // system when it happens to a large body. A reflecting boundary —
+      // a standard technique in bounded-volume N-body simulations —
+      // fixes this by construction: mass and momentum are conserved
+      // exactly, so there's no discontinuity for the barycenter to react
+      // to at all, regardless of how big the body is.
       const maxR = diskRadius() * 1.35;
-      // hoisted out of the loop below: `bodies` itself isn't mutated by
-      // marking indices in `removed`, so this was previously being
-      // recomputed (same O(n) reduce, same result) once per escapee
-      // instead of once per frame
-      const totalMassForEscapees = bodies.reduce((s, b) => s + b.mass, 0);
       for (let i = 0; i < bodies.length; i++) {
         if (removed.has(i)) continue;
         const a = bodies[i];
         const dx = a.x - cx, dy = a.y - cy;
-        if (dx * dx + dy * dy > maxR * maxR) {
-          removed.add(i);
-          spawned.push(spawnBody(totalMassForEscapees, "comet"));
+        const distSq = dx * dx + dy * dy;
+        if (distSq > maxR * maxR) {
+          const dist = Math.sqrt(distSq);
+          const nx = dx / dist, ny = dy / dist;
+          const vRadial = a.vx * nx + a.vy * ny;
+          if (vRadial > 0) {
+            // reflect only the outward-moving component (standard wall-
+            // bounce formula), leaving the tangential component alone —
+            // a slight restitution (<1) bleeds a little energy so a body
+            // settles toward a contained orbit instead of bouncing at
+            // the boundary at the exact same amplitude forever
+            const restitution = 0.9;
+            a.vx -= (1 + restitution) * vRadial * nx;
+            a.vy -= (1 + restitution) * vRadial * ny;
+          }
+          // clamp position to the boundary itself, rather than leaving it
+          // rendered outside the system for the one frame this triggers
+          a.x = cx + nx * maxR;
+          a.y = cy + ny * maxR;
         }
       }
 

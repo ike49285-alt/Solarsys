@@ -7772,14 +7772,22 @@
           }
         }
         const maxR = diskRadius() * 1.35;
-        const totalMassForEscapees = bodies.reduce((s, b) => s + b.mass, 0);
         for (let i = 0; i < bodies.length; i++) {
           if (removed.has(i)) continue;
           const a = bodies[i];
           const dx = a.x - cx, dy = a.y - cy;
-          if (dx * dx + dy * dy > maxR * maxR) {
-            removed.add(i);
-            spawned.push(spawnBody(totalMassForEscapees, "comet"));
+          const distSq = dx * dx + dy * dy;
+          if (distSq > maxR * maxR) {
+            const dist = Math.sqrt(distSq);
+            const nx = dx / dist, ny = dy / dist;
+            const vRadial = a.vx * nx + a.vy * ny;
+            if (vRadial > 0) {
+              const restitution = 0.9;
+              a.vx -= (1 + restitution) * vRadial * nx;
+              a.vy -= (1 + restitution) * vRadial * ny;
+            }
+            a.x = cx + nx * maxR;
+            a.y = cy + ny * maxR;
           }
         }
         if (removed.size > 0) {
