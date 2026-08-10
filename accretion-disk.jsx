@@ -313,6 +313,17 @@ export default function AccretionDisk() {
     // instead, using the distance/speed already computed for it.
     const TIDAL_IMMUNITY_FRAMES = 30;
 
+    // a shredded fragment small enough to be below this mass doesn't get
+    // its own flash ring — a chain-shredded fragment can legitimately
+    // wander back into a Roche zone and get shredded again (real
+    // physics, not a bug: see TIDAL_IMMUNITY_FRAMES above), and each
+    // generation is smaller than the last, so a cascade of several
+    // generations was drawing a cluster of overlapping rings for debris
+    // too small to be individually worth calling out. The shred itself
+    // (removal + fragments) still happens the same either way — this
+    // only gates the visual.
+    const TIDAL_FLASH_MIN_MASS = 1;
+
     // A small chunk of debris thrown outward from `parent` (a real body,
     // or a synthetic {x,y,vx,vy,r} standing in for a merger's combined
     // point) at `angle`/`speed` relative to it. Shared by every violent
@@ -588,7 +599,9 @@ export default function AccretionDisk() {
                   tidalImmuneUntil: frameCount + TIDAL_IMMUNITY_FRAMES,
                 });
               }
-              flashes.push({ x: smaller.x, y: smaller.y, age: 0, kind: "tidal" });
+              if (smaller.mass >= TIDAL_FLASH_MIN_MASS) {
+                flashes.push({ x: smaller.x, y: smaller.y, age: 0, kind: "tidal" });
+              }
               if (smallerIsI) break;
               else continue;
             }

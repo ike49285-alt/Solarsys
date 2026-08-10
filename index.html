@@ -7497,6 +7497,7 @@
         };
       }
       const TIDAL_IMMUNITY_FRAMES = 30;
+      const TIDAL_FLASH_MIN_MASS = 1;
       function spawnEjecta(parent, angle, speed2, mass) {
         return {
           x: parent.x + Math.cos(angle) * (parent.r || 4) * 0.5,
@@ -7640,7 +7641,9 @@
                     tidalImmuneUntil: frameCount + TIDAL_IMMUNITY_FRAMES
                   });
                 }
-                flashes.push({ x: smaller.x, y: smaller.y, age: 0, kind: "tidal" });
+                if (smaller.mass >= TIDAL_FLASH_MIN_MASS) {
+                  flashes.push({ x: smaller.x, y: smaller.y, age: 0, kind: "tidal" });
+                }
                 if (smallerIsI) break;
                 else continue;
               }
