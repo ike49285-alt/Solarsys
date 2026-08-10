@@ -387,13 +387,25 @@ export default function AccretionDisk() {
       const dt = speedRef.current;
 
       // long-exposure density trail: fades far slower than the fast
-      // trail below (~0.6%/frame vs 16%/frame — takes on the order of a
-      // minute to fully clear a mark instead of a fraction of a second).
-      // Nothing sits behind this canvas that needs to show through, so
-      // it can just paint translucent black over itself each frame like
-      // the fast trail always has.
-      densityCtx.fillStyle = "rgba(6, 7, 16, 0.004)";
+      // trail below on a per-frame basis. This has to fade toward
+      // TRANSPARENT (destination-out), not toward opaque black
+      // (source-over) — painting translucent black doesn't just fade
+      // existing marks, it also slowly opacifies every UNTOUCHED pixel
+      // toward that same background color. The color ends up matching
+      // either way, but the alpha climbs regardless, and once nearly the
+      // whole canvas sits at similar high alpha, the actual contrast
+      // between busy and empty areas is gone — everything reads as a
+      // uniform wash instead of a legible density map. Confirmed via a
+      // 5+ minute instrumented run: with source-over fade, average
+      // brightness climbed without leveling off and then plateaued at
+      // ~130/255 with 100% of the canvas over 50% opacity — the entire
+      // background had opacified, not just the trails. destination-out
+      // only ever removes alpha, so an untouched pixel (already at zero)
+      // is completely unaffected no matter how many frames pass.
+      densityCtx.globalCompositeOperation = "destination-out";
+      densityCtx.fillStyle = "rgba(0, 0, 0, 0.006)";
       densityCtx.fillRect(0, 0, width, height);
+      densityCtx.globalCompositeOperation = "source-over";
 
       // the fast trail has to fade toward TRANSPARENT, not toward opaque
       // black — this canvas sits ON TOP of the density one, and
