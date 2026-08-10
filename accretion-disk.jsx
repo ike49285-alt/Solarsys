@@ -1124,7 +1124,7 @@ const styles = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 18px", color: "#e7e7f4", gap: 12, flexWrap: "wrap" },
   title: { fontSize: 16, fontWeight: 700, letterSpacing: "-0.01em" },
   subtitle: { fontSize: 12, color: "#8b8ca8", marginTop: 2 },
-  buttons: { display: "flex", gap: 8 },
+  buttons: { display: "flex", gap: 8, flexWrap: "wrap" },
   toggle: { border: "none", borderRadius: 999, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
   slider: { display: "flex", alignItems: "center", gap: 8, background: "#2a2b3d", color: "#8b8ca8", borderRadius: 999, padding: "8px 14px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" },
   sliderInput: { width: 70, accentColor: "#7dd3fc", cursor: "pointer" },
