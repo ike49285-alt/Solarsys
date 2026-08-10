@@ -113,8 +113,22 @@ function starRGB(mass) {
   return blackbodyRGB(surfaceTemp(mass));
 }
 
+// "#rrggbb" -> "r, g, b", for reusing a body's own hex color in an rgba()
+// string (the density trail below needs this; ordinary bodies only ever
+// carry a hex color, unlike the "r, g, b" tuples starRGB already returns).
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
+}
+
 export default function AccretionDisk() {
   const canvasRef = useRef(null);
+  // second, much-slower-fading canvas sitting behind the main one — a
+  // long-exposure record of where bodies actually spend their time
+  // (orbital density), distinct from the short motion-blur trail on the
+  // main canvas. Needs its own canvas because a single canvas can't fade
+  // two things at two different rates independently.
+  const densityCanvasRef = useRef(null);
   const bodiesRef = useRef([]);
   const pointerRef = useRef({ x: null, y: null, active: false });
   const [pointerMassOn, setPointerMassOn] = useState(false);
@@ -157,6 +171,8 @@ export default function AccretionDisk() {
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
+    const densityCanvas = densityCanvasRef.current;
+    const densityCtx = densityCanvas.getContext("2d");
     let width, height, dpr, cx, cy;
 
     const rockPalette = ["#7dd3fc", "#a78bfa", "#f472b6", "#fbbf24", "#34d399"];
@@ -193,6 +209,14 @@ export default function AccretionDisk() {
       canvas.width = width * dpr;
       canvas.height = height * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // both canvases are absolutely positioned over the same wrap div,
+      // so they always share the same rendered size — reading dimensions
+      // off `canvas` alone is enough for both. Resizing (like the main
+      // canvas) unavoidably wipes whatever density trail had built up;
+      // same forgivable limitation the existing fast trail already has.
+      densityCanvas.width = width * dpr;
+      densityCanvas.height = height * dpr;
+      densityCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       cx = width / 2;
       cy = height / 2;
     }
@@ -354,8 +378,27 @@ export default function AccretionDisk() {
 
     function step() {
       const dt = speedRef.current;
-      ctx.fillStyle = trailsRef.current ? "rgba(6, 7, 16, 0.16)" : "#060710";
+
+      // long-exposure density trail: fades far slower than the fast
+      // trail below (~0.6%/frame vs 16%/frame — takes on the order of a
+      // minute to fully clear a mark instead of a fraction of a second).
+      // Nothing sits behind this canvas that needs to show through, so
+      // it can just paint translucent black over itself each frame like
+      // the fast trail always has.
+      densityCtx.fillStyle = "rgba(6, 7, 16, 0.004)";
+      densityCtx.fillRect(0, 0, width, height);
+
+      // the fast trail has to fade toward TRANSPARENT, not toward opaque
+      // black — this canvas sits ON TOP of the density one, and
+      // repeatedly painting translucent black with the normal
+      // source-over blend would, after ~30-40 frames, converge to fully
+      // opaque and permanently hide the density trail underneath it.
+      // destination-out shrinks existing alpha instead of mixing in more
+      // black, so old pixels fade toward "reveal what's behind me."
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.fillStyle = trailsRef.current ? "rgba(0, 0, 0, 0.16)" : "rgba(0, 0, 0, 1)";
       ctx.fillRect(0, 0, width, height);
+      ctx.globalCompositeOperation = "source-over";
 
       let bodies = bodiesRef.current;
       const p = pointerRef.current;
@@ -829,6 +872,25 @@ export default function AccretionDisk() {
 
       for (const a of bodies) {
         const sx = a.x, sy = a.y;
+
+        // second trail, on the density canvas: a low-alpha mark per body
+        // per frame. A single pass barely registers; a body that keeps
+        // returning to the same stretch of orbit (or a slow one that
+        // lingers) builds up a visibly brighter streak — path density,
+        // not just current motion, and colored by what's actually been
+        // passing through, not a flat heatmap tint.
+        const densityColor =
+          a.remnant === "blackHole" ? "255, 235, 200" :
+          a.remnant === "neutronStar" ? "220, 245, 255" :
+          a.remnant === "whiteDwarf" ? "238, 242, 255" :
+          a.mass >= HYDROGEN_MASS ? starRGB(a.mass).join(", ") :
+          a.mass >= DEUTERIUM_MASS ? "182, 72, 108" :
+          hexToRgb(a.color);
+        densityCtx.beginPath();
+        densityCtx.fillStyle = `rgba(${densityColor}, 0.12)`;
+        densityCtx.arc(sx, sy, Math.max(1, a.r * 0.7), 0, Math.PI * 2);
+        densityCtx.fill();
+
         ctx.globalAlpha = 1; // reset every body: a remnant draw below doesn't set 0.92 like the normal path does, and alpha otherwise leaks across iterations
         if (a.remnant === "blackHole") {
           // absorbs light rather than emitting it — the opposite of every
@@ -1030,7 +1092,10 @@ export default function AccretionDisk() {
           </button>
         </div>
       </div>
-      <canvas ref={canvasRef} style={styles.canvas} />
+      <div style={styles.canvasWrap}>
+        <canvas ref={densityCanvasRef} style={{ ...styles.canvasLayer, pointerEvents: "none" }} />
+        <canvas ref={canvasRef} style={{ ...styles.canvasLayer, touchAction: "none" }} />
+      </div>
     </div>
   );
 }
@@ -1042,5 +1107,6 @@ const styles = {
   subtitle: { fontSize: 12, color: "#8b8ca8", marginTop: 2 },
   buttons: { display: "flex", gap: 8 },
   toggle: { border: "none", borderRadius: 999, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
-  canvas: { flex: 1, width: "100%", touchAction: "none" },
+  canvasWrap: { flex: 1, width: "100%", position: "relative" },
+  canvasLayer: { position: "absolute", top: 0, left: 0, width: "100%", height: "100%" },
 };
