@@ -7550,8 +7550,10 @@
       }
       function step() {
         const dt = speedRef.current;
-        densityCtx.fillStyle = "rgba(6, 7, 16, 0.004)";
+        densityCtx.globalCompositeOperation = "destination-out";
+        densityCtx.fillStyle = "rgba(0, 0, 0, 0.006)";
         densityCtx.fillRect(0, 0, width, height);
+        densityCtx.globalCompositeOperation = "source-over";
         ctx.globalCompositeOperation = "destination-out";
         ctx.fillStyle = trailsRef.current ? "rgba(0, 0, 0, 0.16)" : "rgba(0, 0, 0, 1)";
         ctx.fillRect(0, 0, width, height);
