@@ -7382,6 +7382,7 @@
     const [spawningOn, setSpawningOn] = (0, import_react.useState)(true);
     const [trails, setTrails] = (0, import_react.useState)(true);
     const [speed, setSpeed] = (0, import_react.useState)(1);
+    const [trailDensity, setTrailDensity] = (0, import_react.useState)(0.05);
     const [stats, setStats] = (0, import_react.useState)({
       count: 0,
       starCount: 0,
@@ -7400,6 +7401,7 @@
     const pointerMassRef = (0, import_react.useRef)(pointerMassOn);
     const speedRef = (0, import_react.useRef)(speed);
     const spawningOnRef = (0, import_react.useRef)(spawningOn);
+    const trailDensityRef = (0, import_react.useRef)(trailDensity);
     (0, import_react.useEffect)(() => {
       trailsRef.current = trails;
     }, [trails]);
@@ -7412,6 +7414,9 @@
     (0, import_react.useEffect)(() => {
       spawningOnRef.current = spawningOn;
     }, [spawningOn]);
+    (0, import_react.useEffect)(() => {
+      trailDensityRef.current = trailDensity;
+    }, [trailDensity]);
     (0, import_react.useEffect)(() => {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
@@ -7850,7 +7855,7 @@
           const sx = a.x, sy = a.y;
           const densityColor = a.remnant === "blackHole" ? "255, 235, 200" : a.remnant === "neutronStar" ? "220, 245, 255" : a.remnant === "whiteDwarf" ? "238, 242, 255" : a.mass >= HYDROGEN_MASS ? starRGB(a.mass).join(", ") : a.mass >= DEUTERIUM_MASS ? "182, 72, 108" : hexToRgb(a.color);
           densityCtx.beginPath();
-          densityCtx.fillStyle = `rgba(${densityColor}, 0.12)`;
+          densityCtx.fillStyle = `rgba(${densityColor}, ${trailDensityRef.current})`;
           densityCtx.arc(sx, sy, Math.max(1, a.r * 0.7), 0, Math.PI * 2);
           densityCtx.fill();
           ctx.globalAlpha = 1;
@@ -8060,7 +8065,24 @@
                 "x"
               ]
             }
-          )
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { style: styles.slider, children: [
+            "Density ",
+            Math.round(trailDensity * 100),
+            "%",
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+              "input",
+              {
+                type: "range",
+                min: "0.01",
+                max: "0.2",
+                step: "0.01",
+                value: trailDensity,
+                onChange: (e) => setTrailDensity(Number(e.target.value)),
+                style: styles.sliderInput
+              }
+            )
+          ] })
         ] })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: styles.canvasWrap, children: [
@@ -8076,6 +8098,8 @@
     subtitle: { fontSize: 12, color: "#8b8ca8", marginTop: 2 },
     buttons: { display: "flex", gap: 8 },
     toggle: { border: "none", borderRadius: 999, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
+    slider: { display: "flex", alignItems: "center", gap: 8, background: "#2a2b3d", color: "#8b8ca8", borderRadius: 999, padding: "8px 14px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" },
+    sliderInput: { width: 70, accentColor: "#7dd3fc", cursor: "pointer" },
     canvasWrap: { flex: 1, width: "100%", position: "relative" },
     canvasLayer: { position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }
   };

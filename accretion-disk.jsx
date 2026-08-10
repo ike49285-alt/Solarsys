@@ -135,6 +135,11 @@ export default function AccretionDisk() {
   const [spawningOn, setSpawningOn] = useState(true);
   const [trails, setTrails] = useState(true);
   const [speed, setSpeed] = useState(1);
+  // how opaque a single density-trail mark is per body per frame — the
+  // whole point is that it should barely register on one pass and only
+  // read as a bright streak once a path is genuinely well-traveled, so
+  // this defaults low and is user-tunable rather than fixed
+  const [trailDensity, setTrailDensity] = useState(0.05);
   // All the per-frame readout numbers (population, masses, drift, ...) are
   // collapsed into one state object updated at most 10x/sec — see
   // statsRef below. They used to be 8 separate setState calls fired every
@@ -162,11 +167,13 @@ export default function AccretionDisk() {
   const pointerMassRef = useRef(pointerMassOn);
   const speedRef = useRef(speed);
   const spawningOnRef = useRef(spawningOn);
+  const trailDensityRef = useRef(trailDensity);
 
   useEffect(() => { trailsRef.current = trails; }, [trails]);
   useEffect(() => { pointerMassRef.current = pointerMassOn; }, [pointerMassOn]);
   useEffect(() => { speedRef.current = speed; }, [speed]);
   useEffect(() => { spawningOnRef.current = spawningOn; }, [spawningOn]);
+  useEffect(() => { trailDensityRef.current = trailDensity; }, [trailDensity]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -887,7 +894,7 @@ export default function AccretionDisk() {
           a.mass >= DEUTERIUM_MASS ? "182, 72, 108" :
           hexToRgb(a.color);
         densityCtx.beginPath();
-        densityCtx.fillStyle = `rgba(${densityColor}, 0.12)`;
+        densityCtx.fillStyle = `rgba(${densityColor}, ${trailDensityRef.current})`;
         densityCtx.arc(sx, sy, Math.max(1, a.r * 0.7), 0, Math.PI * 2);
         densityCtx.fill();
 
@@ -1090,6 +1097,18 @@ export default function AccretionDisk() {
           >
             Speed {speed}x
           </button>
+          <label style={styles.slider}>
+            Density {Math.round(trailDensity * 100)}%
+            <input
+              type="range"
+              min="0.01"
+              max="0.2"
+              step="0.01"
+              value={trailDensity}
+              onChange={(e) => setTrailDensity(Number(e.target.value))}
+              style={styles.sliderInput}
+            />
+          </label>
         </div>
       </div>
       <div style={styles.canvasWrap}>
@@ -1107,6 +1126,8 @@ const styles = {
   subtitle: { fontSize: 12, color: "#8b8ca8", marginTop: 2 },
   buttons: { display: "flex", gap: 8 },
   toggle: { border: "none", borderRadius: 999, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
+  slider: { display: "flex", alignItems: "center", gap: 8, background: "#2a2b3d", color: "#8b8ca8", borderRadius: 999, padding: "8px 14px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" },
+  sliderInput: { width: 70, accentColor: "#7dd3fc", cursor: "pointer" },
   canvasWrap: { flex: 1, width: "100%", position: "relative" },
   canvasLayer: { position: "absolute", top: 0, left: 0, width: "100%", height: "100%" },
 };
