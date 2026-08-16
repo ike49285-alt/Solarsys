@@ -57,7 +57,7 @@
     flex-wrap: wrap;
     gap: 0.35rem;
   }
-  button, select, input[type="text"] {
+  button, select, input[type="text"], input[type="number"], textarea {
     font-family: inherit;
     font-size: 0.85rem;
     color: var(--text);
@@ -67,9 +67,11 @@
     padding: 0.5rem 0.8rem;
     cursor: pointer;
   }
-  input[type="text"] { cursor: text; min-width: 10rem; }
+  input[type="text"], input[type="number"], textarea { cursor: text; }
+  input[type="text"] { min-width: 10rem; }
+  textarea { font-family: inherit; resize: vertical; width: 100%; cursor: text; }
   select { cursor: pointer; }
-  button.type-btn.active {
+  button.type-btn.active, button.toggle-btn.active {
     background: var(--accent);
     border-color: var(--accent-bright);
     color: #fdf3e2;
@@ -111,10 +113,24 @@
     position: sticky;
     top: 1rem;
   }
-  aside h2 {
+  aside h2 { margin: 0 0 0.25rem; }
+  .title-input {
+    display: block;
+    width: 100%;
     margin: 0 0 0.25rem;
+    padding: 0.1rem 0;
     font-size: 1.15rem;
+    font-family: inherit;
+    font-weight: bold;
     color: #e7dcc0;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid transparent;
+    cursor: text;
+  }
+  .title-input:hover, .title-input:focus {
+    border-bottom-color: var(--panel-border);
+    outline: none;
   }
   .flavor {
     font-style: italic;
@@ -125,6 +141,14 @@
     border-left: 2px solid var(--accent);
     padding-left: 0.6rem;
   }
+  .notes-area {
+    display: block;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    min-height: 4.5rem;
+    margin: 0 0 0.9rem;
+  }
+  .notes-area::placeholder { color: var(--text-dim); font-style: italic; }
   aside h3 {
     font-size: 0.85rem;
     text-transform: uppercase;
@@ -150,36 +174,97 @@
   }
   ul.room-list li { align-items: flex-start; }
   ul.room-list li.secret { color: var(--accent-bright); font-style: italic; }
-  ul.room-list li::before { content: "•"; color: var(--text-dim); }
+  ul.room-list li::before { content: "•"; color: var(--text-dim); margin-top: 0.4rem; }
   ul.room-list li.secret::before { content: "†"; color: var(--accent-bright); }
-  .room-entry { display: flex; flex-direction: column; gap: 0.2rem; }
-  .room-lead {
-    font-size: 0.78rem;
-    font-style: italic;
-    color: var(--text-dim);
-    line-height: 1.35;
+  .room-entry { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 0; }
+  .room-notes {
+    font-size: 0.8rem;
+    min-height: 2.6rem;
+    font-style: normal;
   }
-  ul.room-list li.secret .room-lead { color: var(--accent-bright); }
+  .room-notes::placeholder { color: var(--text-dim); font-style: italic; }
   .threat-hint {
     font-size: 0.8rem;
     font-style: italic;
     color: var(--text-dim);
     margin: 0 0 0.5rem;
   }
-  ul.threat-list li { justify-content: space-between; }
-  ul.threat-list li.empty::before { content: ""; }
-  ul.threat-list li.empty { color: var(--text-dim); font-style: italic; }
-  ul.threat-list button {
+  ul.threat-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  ul.threat-list li { display: block; margin: 0; }
+  ul.threat-list li.empty { color: var(--text-dim); font-style: italic; padding-left: 1rem; }
+  ul.threat-list li.empty::before { content: "•"; color: var(--text-dim); margin-right: 0.5rem; }
+  .threat-card {
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 0.6rem;
+    background: rgba(0,0,0,0.15);
+  }
+  .threat-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+  }
+  .threat-number {
+    flex: none;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fdf3e2;
+    font-size: 0.72rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .threat-name {
+    flex: 1;
+    min-width: 0;
+    font-weight: bold;
+  }
+  .threat-remove-btn {
+    flex: none;
     background: transparent;
     border: 1px solid var(--panel-border);
     color: var(--text-dim);
     border-radius: 3px;
     font-size: 0.72rem;
-    padding: 0.05rem 0.4rem;
-    line-height: 1.5;
+    padding: 0.1rem 0.45rem;
     cursor: pointer;
   }
-  ul.threat-list button:hover { border-color: var(--accent-bright); color: var(--accent-bright); }
+  .threat-remove-btn:hover { border-color: var(--accent-bright); color: var(--accent-bright); }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.35rem;
+    margin-bottom: 0.5rem;
+  }
+  .stat-field { display: flex; flex-direction: column; gap: 0.15rem; }
+  .stat-field span {
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+  }
+  .stat-field input {
+    width: 100%;
+    padding: 0.25rem 0.3rem;
+    font-size: 0.82rem;
+    text-align: center;
+  }
+  .derived-row {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--panel-border);
+  }
+  .derived-row strong { color: var(--text); }
+  .field-row { display: flex; flex-direction: column; gap: 0.15rem; margin-bottom: 0.4rem; font-size: 0.78rem; color: var(--text-dim); }
+  .field-row:last-child { margin-bottom: 0; }
+  .field-row input, .field-row textarea { font-size: 0.8rem; padding: 0.3rem 0.5rem; color: var(--text); }
+  .field-row textarea { min-height: 2.2rem; }
   .toggle-group {
     display: flex;
     align-items: center;
@@ -188,7 +273,6 @@
     color: var(--text-dim);
   }
   .toggle-group input { cursor: pointer; }
-  #customMonsterInput { min-width: 8rem; }
   footer {
     padding: 0.6rem 1.25rem;
     font-size: 0.78rem;
@@ -223,8 +307,7 @@
         <input type="text" id="seedInput" placeholder="seed">
         <button id="randomizeBtn" title="Random seed">🎲</button>
       </div>
-      <select id="monsterSelect"><option value="">— place a monster —</option></select>
-      <input type="text" id="customMonsterInput" placeholder="custom name" style="display:none;">
+      <button id="addThreatBtn" class="toggle-btn" title="Arm placement, then click the map">+ Threat</button>
       <label class="toggle-group"><input type="checkbox" id="showThreatsToggle" checked> Show markers</label>
       <button id="clearThreatsBtn" title="Remove all placed threats">Clear threats</button>
       <button class="primary" id="generateBtn">Generate</button>
@@ -236,14 +319,16 @@
       <canvas id="mapCanvas"></canvas>
     </div>
     <aside>
-      <h2 id="mapTitle">—</h2>
+      <input type="text" id="mapTitleInput" class="title-input" aria-label="Map title">
       <p class="flavor" id="mapFlavor">—</p>
+      <h3>Keeper Notes</h3>
+      <textarea id="mapNotes" class="notes-area" placeholder="Notes for this location — whatever the Keeper needs to remember."></textarea>
       <h3>Key</h3>
       <ul class="key-list" id="keyList"></ul>
       <h3 id="roomsHeading" style="display:none;">Rooms &amp; Chambers</h3>
       <ul class="room-list" id="roomList"></ul>
       <h3>Threats <span style="font-weight:normal; text-transform:none; letter-spacing:normal;">(Keeper only)</span></h3>
-      <p class="threat-hint">Pick a monster above, then click the map to place it. Click a placed marker (or its ✕) to remove it.</p>
+      <p class="threat-hint">Click "+ Threat," then click the map to place a marker. Click a placed marker (or its ✕) to remove it. Stats are yours to fill in — HP/MP/Damage Bonus/Build calculate themselves from what you enter.</p>
       <ul class="room-list threat-list" id="threatList"></ul>
     </aside>
   </main>
@@ -849,76 +934,26 @@ function generateVillage(cols, rows, rng) {
   }
 
   const LOCATIONS = [
-    { label: 'General Store', furniture: 'crate', leads: [
-      "The ledger shows a spike in kerosene and rope purchases last month, all to the same buyer.",
-      "The shopkeeper keeps a second, unofficial ledger under the counter — cash sales he doesn't want traced.",
-    ] },
-    { label: "Sheriff's Office", furniture: 'desk', leads: [
-      "A missing-persons file for a name none of the townsfolk will discuss.",
-      "The evidence locker is missing an item logged three weeks ago — the paperwork says it was never checked out.",
-    ] },
-    { label: "Doctor's House", furniture: 'desk', leads: [
-      "Patient notes describe symptoms that don't match any diagnosis the doctor ever wrote down.",
-      "A locked drawer holds X-rays the doctor insists were 'inconclusive.'",
-    ] },
-    { label: 'Boarding House', furniture: 'bed', leads: [
-      "The guest registry has a name crossed out so hard the pen tore the page.",
-      "Room 4 has been paid for a year in advance by someone the landlady has never met.",
-    ] },
-    { label: 'The Anchor Inn', furniture: 'table', leads: [
-      "The regulars go quiet whenever a stranger asks about the old lighthouse.",
-      "The barkeep waters down more than the whiskey — ask about last month's storm and he changes the subject.",
-    ] },
-    { label: 'Chapel', furniture: null, leads: [
-      "The burial register lists a date of death that hasn't happened yet.",
-      "The reverend has stopped giving Sunday sermons, and no one will say why.",
-    ] },
-    { label: 'Post Office', furniture: 'desk', leads: [
-      "A parcel addressed to someone who died two years ago was delivered anyway — and accepted.",
-      "Outgoing mail to a research institute has doubled since spring, all from the same house.",
-    ] },
-    { label: 'Blacksmith', furniture: 'crate', leads: [
-      "An order for heavy iron chains, more than anyone local could need, was picked up in the middle of the night.",
-      "The smith has been melting down old ship fittings. Ask where they came from and he won't meet your eyes.",
-    ] },
-    { label: "Fisherman's Shack", furniture: 'crate', leads: [
-      "The nets keep coming back torn in ways no fish could manage.",
-      "Someone's been paying well over market price for anything hauled up from the water past the point.",
-    ] },
-    { label: 'Schoolhouse', furniture: 'bookshelf', leads: [
-      "A student stopped attending three weeks ago; the teacher still marks him present.",
-      "A child's drawing pinned to the wall shows something that isn't in any of the picture books.",
-    ] },
-    { label: 'Newspaper Office', furniture: 'desk', leads: [
-      "The morgue file on last year's drownings is missing its photographs.",
-      "A reporter's desk sits untouched since she left to 'follow up a lead' at the old quarry.",
-    ] },
-    { label: 'Town Hall', furniture: 'bookshelf', leads: [
-      "Property records show the old mill changed hands for exactly one dollar, three times in ten years.",
-      "A zoning variance was quietly approved for a building that appears on no survey since.",
-    ] },
-    { label: 'Antiques & Curiosities', furniture: 'crate', leads: [
-      "An item in the back room is kept under a cloth, and the owner won't say why.",
-      "A ledger of provenance for one item traces back to a ship reported lost at sea.",
-    ] },
-    { label: 'Family Residence', familyName: true, furniture: 'table', leads: [
-      "A grown child moved back home suddenly and hasn't been seen leaving the house since.",
-      "The curtains are drawn at all hours, and the woodpile hasn't been touched all winter.",
-    ] },
+    { label: 'General Store', furniture: 'crate' },
+    { label: "Sheriff's Office", furniture: 'desk' },
+    { label: "Doctor's House", furniture: 'desk' },
+    { label: 'Boarding House', furniture: 'bed' },
+    { label: 'The Anchor Inn', furniture: 'table' },
+    { label: 'Chapel', furniture: null },
+    { label: 'Post Office', furniture: 'desk' },
+    { label: 'Blacksmith', furniture: 'crate' },
+    { label: "Fisherman's Shack", furniture: 'crate' },
+    { label: 'Schoolhouse', furniture: 'bookshelf' },
+    { label: 'Newspaper Office', furniture: 'desk' },
+    { label: 'Town Hall', furniture: 'bookshelf' },
+    { label: 'Antiques & Curiosities', furniture: 'crate' },
+    { label: 'Family Residence', familyName: true, furniture: 'table' },
   ];
   const SECRET_LOCATIONS = [
-    { label: 'Boarded-Up Cottage', furniture: null, leads: [
-      "Nailed shut from the outside — someone wanted whatever's inside to stay in, not out.",
-    ] },
-    { label: 'Locked Storm Cellar', furniture: null, leads: [
-      "The padlock is new. The door beneath it is not.",
-    ] },
-    { label: 'Abandoned Chandlery', furniture: 'crate', leads: [
-      "Condemned after the harbor fire, except the lamps inside still burn some nights.",
-    ] },
-    { label: 'Sealed Meeting House', furniture: null, leads: [
-      "The congregation that built it hasn't held a service in forty years — and still meets.",
-    ] },
+    { label: 'Boarded-Up Cottage', furniture: null },
+    { label: 'Locked Storm Cellar', furniture: null },
+    { label: 'Abandoned Chandlery', furniture: 'crate' },
+    { label: 'Sealed Meeting House', furniture: null },
   ];
 
   const rooms = [];
@@ -956,11 +991,10 @@ function generateVillage(cols, rows, rng) {
     } while (usedLabels.has(label) && guard < 30 && !secret);
     usedLabels.add(label);
 
-    const lead = entry.leads[Math.floor(rng() * entry.leads.length)];
     const room = {
       x: bx, y: by, w: bw, h: bh,
       cx: bx + Math.floor(bw / 2), cy: by + Math.floor(bh / 2),
-      label, secret, lead,
+      label, secret,
     };
     rooms.push(room);
     placed++;
@@ -1367,50 +1401,48 @@ function renderMap(canvas, map, cellSize) {
 }
 
 /* ---------------------------------------------------------------------
- * Lurking threats — a per-map-type pool of Mythos-flavored dangers the
- * Keeper picks from a dropdown and places by clicking the map (click a
- * placed marker again, or its ✕ in the sidebar, to remove it). Markers
- * are drawn as a separate overlay pass after the base map, gated by the
- * "Show markers" toggle, so a Keeper can hide them again before handing
- * the same map to players.
+ * Lurking threats — blank, Keeper-authored markers. The Keeper arms
+ * placement with #addThreatBtn and clicks the map to drop a numbered
+ * marker (click an existing one, or its ✕ in the sidebar, to remove
+ * it). Every marker opens as an empty Call of Cthulhu 7th-edition-style
+ * stat block: real characteristic fields (STR/CON/SIZ/DEX/APP/INT/POW/
+ * EDU) with HP, Magic Points, and Damage Bonus/Build computed live from
+ * whatever numbers the Keeper types in, using the standard 7e formulas
+ * below. Nothing about a specific creature is pre-written — this tool
+ * generates the *map*, never the monster or the story behind it; see
+ * CLAUDE.md before adding any named creature or flavor text back in.
  * ------------------------------------------------------------------- */
-const MONSTER_POOLS = {
-  cave: [
-    { name: 'A Deep One outrider', tier: 'Moderate', desc: "Come up from a flooded tunnel to investigate the light. It will retreat if outnumbered — and return with kin if it isn't." },
-    { name: 'A shoggoth remnant', tier: 'Severe', desc: 'A boneless, half-intelligent mass left over from something’s failed experiment. It fills any tunnel it moves through.' },
-    { name: 'A mining party of Mi-Go', tier: 'Severe', desc: 'Fungoid things from beyond the stars, here for the rock itself. They will negotiate before they fight.' },
-    { name: 'Ghouls, feasting', tier: 'Moderate', desc: 'They knew this cave before anyone mapped it. Not hostile unless cornered — but always hungry.' },
-    { name: 'Something not listed in any bestiary', tier: 'Extreme', desc: "The idol wasn't carved to be looked at. Best not to describe it directly until it's already too late." },
-  ],
-  mansion: [
-    { name: 'A star vampire, unseen', tier: 'Severe', desc: 'Invisible but for a faint outline against dust and steam. It has fed on the household, unnoticed, for years.' },
-    { name: 'A dimensional shambler, house-bound', tier: 'Severe', desc: 'Summoned decades ago and never properly dismissed. It knows the halls better than the living residents do.' },
-    { name: 'The last surviving cultist', tier: 'Low', desc: 'Elderly, devoted, and utterly convinced the ritual just needs one more try. Not dangerous alone — but not alone for long.' },
-    { name: 'A byakhee, roosting', tier: 'Moderate', desc: 'Something the family patriarch called down and could never quite send back. It sleeps between summonings.' },
-    { name: 'Whatever answers when the sigil is completed', tier: 'Extreme', desc: 'Nothing lives here yet. But someone careless is one completed ritual away from changing that.' },
-  ],
-  crypt: [
-    { name: 'Ghouls, several generations deep', tier: 'Moderate', desc: 'This vault has fed a ghoul warren for longer than the family upstairs has existed.' },
-    { name: 'A hound of Tindalos, drawn by the angles', tier: 'Severe', desc: "The corners down here are all wrong. Something noticed." },
-    { name: "The vault's rightful occupant, unburied", tier: 'Severe', desc: "The sarcophagus lid doesn't sit flush anymore. It hasn't for a while." },
-    { name: 'A swarm of grave-things', tier: 'Low', desc: 'Small, many, and individually harmless. Collectively, a very bad afternoon.' },
-    { name: 'Something the family paid to keep buried', tier: 'Extreme', desc: "There's a reason this chamber was sealed rather than simply locked." },
-  ],
-  graveyard: [
-    { name: 'A ghoul pack, freshly arrived', tier: 'Moderate', desc: "They followed the scent of the disturbed grave, and won't leave until it's empty." },
-    { name: 'The recently deceased, restless', tier: 'Moderate', desc: "Buried in haste, for reasons the family won't discuss. Doesn't seem to have noticed it's dead yet." },
-    { name: 'A dark young, transplanted', tier: 'Severe', desc: "Something's been growing in the mausoleum's foundation. It's not a tree root." },
-    { name: 'The groundskeeper, no longer entirely himself', tier: 'Low', desc: 'Still does the rounds every night. Still rings the gate bell. Hasn’t drawn breath in some time.' },
-    { name: 'Whatever the cultists came here to wake up', tier: 'Extreme', desc: "The disturbed earth wasn't an accident, and it wasn't grave robbers." },
-  ],
-  village: [
-    { name: 'A hybrid townsperson, watching', tier: 'Low', desc: "Looks ordinary enough until you notice how long it's been standing at the window without blinking." },
-    { name: 'A cult cell, meeting after dark', tier: 'Moderate', desc: "Half the town's 'prayer meeting' regulars. They already know the investigators are asking questions." },
-    { name: 'A Deep One, come up the river', tier: 'Severe', desc: "Doesn't belong on land, and isn't happy about being seen on it." },
-    { name: 'The thing wearing the sheriff', tier: 'Severe', desc: "Still does the job. Still walks the same beat. Isn't entirely the man who held it last year." },
-    { name: 'Whatever the town has been feeding', tier: 'Extreme', desc: "There's a reason the harbor catch has been thin, and it isn't overfishing." },
-  ],
-};
+const STAT_FIELDS = ['str', 'con', 'siz', 'dex', 'app', 'int', 'pow', 'edu'];
+
+function blankThreat(x, y) {
+  const stats = {};
+  for (const f of STAT_FIELDS) stats[f] = '';
+  return { x, y, name: '', stats, move: '', armor: '', attacks: '', skills: '', sanLoss: '', notes: '' };
+}
+
+// STR+SIZ -> [Damage Bonus display, Build] per the CoC 7e core rulebook table.
+function dbBuildFromStrSiz(sum) {
+  if (sum <= 64) return ['-2', -2];
+  if (sum <= 84) return ['-1', -1];
+  if (sum <= 124) return ['0', 0];
+  if (sum <= 164) return ['+1D4', 1];
+  if (sum <= 204) return ['+1D6', 2];
+  if (sum <= 284) return ['+2D6', 3];
+  if (sum <= 364) return ['+3D6', 4];
+  if (sum <= 444) return ['+4D6', 5];
+  const extraSteps = Math.ceil((sum - 444) / 80);
+  return [`+${4 + extraSteps}D6`, 5 + extraSteps];
+}
+
+function computeDerived(stats) {
+  const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+  const con = num(stats.con), siz = num(stats.siz), pow = num(stats.pow), str = num(stats.str);
+  const hp = (con !== null && siz !== null) ? Math.floor((con + siz) / 10) : null;
+  const mp = (pow !== null) ? Math.floor(pow / 5) : null;
+  let db = null, build = null;
+  if (str !== null && siz !== null) [db, build] = dbBuildFromStrSiz(str + siz);
+  return { hp, mp, db, build };
+}
 
 /* ---------------------------------------------------------------------
  * App wiring
@@ -1432,17 +1464,19 @@ const canvas = document.getElementById('mapCanvas');
 const seedInput = document.getElementById('seedInput');
 const sizeSelect = document.getElementById('sizeSelect');
 const typeGroup = document.getElementById('typeGroup');
-const titleEl = document.getElementById('mapTitle');
+const titleInput = document.getElementById('mapTitleInput');
 const flavorEl = document.getElementById('mapFlavor');
+const mapNotesEl = document.getElementById('mapNotes');
 const keyListEl = document.getElementById('keyList');
 const roomListEl = document.getElementById('roomList');
 const roomsHeadingEl = document.getElementById('roomsHeading');
 const threatListEl = document.getElementById('threatList');
-const monsterSelect = document.getElementById('monsterSelect');
-const customMonsterInput = document.getElementById('customMonsterInput');
+const addThreatBtn = document.getElementById('addThreatBtn');
 const showThreatsToggle = document.getElementById('showThreatsToggle');
 const clearThreatsBtn = document.getElementById('clearThreatsBtn');
 const footerEl = document.getElementById('footerText');
+
+let placingThreat = false;
 
 const ADJ = ["Whispering", "Hollow", "Forgotten", "Shrouded", "Withered", "Silent", "Drowned", "Gnarled", "Pale", "Nameless"];
 const NOUN = ["Hollow", "Reach", "Fen", "Barrow", "Hollowgate", "Mire", "Cairn", "Vault", "Thicket", "Passage"];
@@ -1450,34 +1484,10 @@ function randomSeedWord(rng) {
   return `${ADJ[Math.floor(rng() * ADJ.length)]}-${NOUN[Math.floor(rng() * NOUN.length)]}-${Math.floor(rng() * 90 + 10)}`;
 }
 
-function populateMonsterSelect(type) {
-  const pool = MONSTER_POOLS[type];
-  monsterSelect.innerHTML = '';
-  const placeholder = document.createElement('option');
-  placeholder.value = '';
-  placeholder.textContent = '— place a monster —';
-  monsterSelect.appendChild(placeholder);
-  pool.forEach((m, i) => {
-    const opt = document.createElement('option');
-    opt.value = String(i);
-    opt.textContent = `${m.name} [${m.tier}]`;
-    monsterSelect.appendChild(opt);
-  });
-  const customOpt = document.createElement('option');
-  customOpt.value = 'custom';
-  customOpt.textContent = 'Custom…';
-  monsterSelect.appendChild(customOpt);
-  monsterSelect.value = '';
-  customMonsterInput.style.display = 'none';
-  customMonsterInput.value = '';
-  updateCanvasCursor();
-}
-
-function updateCanvasCursor() {
-  const active = monsterSelect.value === 'custom'
-    ? customMonsterInput.value.trim().length > 0
-    : monsterSelect.value !== '';
-  canvas.style.cursor = active ? 'crosshair' : 'default';
+function setPlacingThreat(on) {
+  placingThreat = on;
+  addThreatBtn.classList.toggle('active', on);
+  canvas.style.cursor = on ? 'crosshair' : 'default';
 }
 
 function cellFromEvent(e) {
@@ -1485,6 +1495,95 @@ function cellFromEvent(e) {
   const gx = Math.floor((e.clientX - rect.left) / (rect.width / currentMap.cols));
   const gy = Math.floor((e.clientY - rect.top) / (rect.height / currentMap.rows));
   return { gx, gy };
+}
+
+const STAT_LABELS = { str: 'STR', con: 'CON', siz: 'SIZ', dex: 'DEX', app: 'APP', int: 'INT', pow: 'POW', edu: 'EDU' };
+
+function buildThreatCard(threat, index) {
+  const li = document.createElement('li');
+  const card = document.createElement('div');
+  card.className = 'threat-card';
+
+  const head = document.createElement('div');
+  head.className = 'threat-card-head';
+  const number = document.createElement('span');
+  number.className = 'threat-number';
+  number.textContent = String(index + 1);
+  head.appendChild(number);
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.className = 'threat-name';
+  nameInput.placeholder = 'Name this threat';
+  nameInput.value = threat.name;
+  nameInput.addEventListener('input', () => { threat.name = nameInput.value; });
+  head.appendChild(nameInput);
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'threat-remove-btn';
+  removeBtn.textContent = '✕';
+  removeBtn.title = 'Remove this marker';
+  removeBtn.addEventListener('click', () => { placedThreats.splice(index, 1); redraw(); });
+  head.appendChild(removeBtn);
+  card.appendChild(head);
+
+  const statGrid = document.createElement('div');
+  statGrid.className = 'stat-grid';
+  const derivedRow = document.createElement('div');
+  derivedRow.className = 'derived-row';
+  const refreshDerived = () => {
+    const d = computeDerived(threat.stats);
+    derivedRow.innerHTML = '';
+    const parts = [
+      ['HP', d.hp === null ? '—' : d.hp],
+      ['MP', d.mp === null ? '—' : d.mp],
+      ['DB', d.db === null ? '—' : d.db],
+      ['Build', d.build === null ? '—' : d.build],
+    ];
+    parts.forEach(([label, val], i) => {
+      if (i > 0) derivedRow.appendChild(document.createTextNode('   '));
+      const strong = document.createElement('strong');
+      strong.textContent = String(val);
+      derivedRow.appendChild(document.createTextNode(label + ' '));
+      derivedRow.appendChild(strong);
+    });
+  };
+  for (const f of STAT_FIELDS) {
+    const field = document.createElement('div');
+    field.className = 'stat-field';
+    const label = document.createElement('span');
+    label.textContent = STAT_LABELS[f];
+    field.appendChild(label);
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.value = threat.stats[f];
+    input.addEventListener('input', () => { threat.stats[f] = input.value; refreshDerived(); });
+    field.appendChild(input);
+    statGrid.appendChild(field);
+  }
+  card.appendChild(statGrid);
+  refreshDerived();
+  card.appendChild(derivedRow);
+
+  const makeField = (labelText, value, multiline, onInput) => {
+    const row = document.createElement('label');
+    row.className = 'field-row';
+    row.appendChild(document.createTextNode(labelText));
+    const field = document.createElement(multiline ? 'textarea' : 'input');
+    if (!multiline) field.type = 'text';
+    field.value = value;
+    field.addEventListener('input', () => onInput(field.value));
+    row.appendChild(field);
+    card.appendChild(row);
+  };
+  makeField('Move', threat.move, false, v => { threat.move = v; });
+  makeField('Armor', threat.armor, false, v => { threat.armor = v; });
+  makeField('Attacks', threat.attacks, true, v => { threat.attacks = v; });
+  makeField('Skills', threat.skills, true, v => { threat.skills = v; });
+  makeField('Sanity Loss', threat.sanLoss, false, v => { threat.sanLoss = v; });
+  makeField('Notes', threat.notes, true, v => { threat.notes = v; });
+
+  li.appendChild(card);
+  return li;
 }
 
 function updateThreatList() {
@@ -1496,20 +1595,7 @@ function updateThreatList() {
     threatListEl.appendChild(li);
     return;
   }
-  placedThreats.forEach((t, i) => {
-    const li = document.createElement('li');
-    li.classList.add('secret');
-    const span = document.createElement('span');
-    span.textContent = `${i + 1}. ${t.monster.name}${t.monster.tier ? ' [' + t.monster.tier + ']' : ''}`;
-    li.appendChild(span);
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = '✕';
-    btn.title = 'Remove this marker';
-    btn.addEventListener('click', () => { placedThreats.splice(i, 1); redraw(); });
-    li.appendChild(btn);
-    threatListEl.appendChild(li);
-  });
+  placedThreats.forEach((t, i) => threatListEl.appendChild(buildThreatCard(t, i)));
 }
 
 function redraw() {
@@ -1526,7 +1612,6 @@ function setActiveType(type) {
   for (const btn of typeGroup.querySelectorAll('.type-btn')) {
     btn.classList.toggle('active', btn.dataset.type === type);
   }
-  populateMonsterSelect(type);
 }
 
 function regenerate() {
@@ -1535,14 +1620,18 @@ function regenerate() {
   const { cols, rows } = SIZES[sizeSelect.value];
   const gen = GENERATORS[state.type];
   currentMap = gen(cols, rows, rng);
+  currentMap.notes = '';
+  for (const room of currentMap.rooms) room.notes = '';
   placedThreats = [];
+  setPlacingThreat(false);
   updateSidebar(currentMap, seedStr);
   redraw();
 }
 
 function updateSidebar(map, seedStr) {
-  titleEl.textContent = map.title;
+  titleInput.value = map.title;
   flavorEl.textContent = map.flavor;
+  mapNotesEl.value = map.notes;
   keyListEl.innerHTML = '';
   for (const item of map.key) {
     const li = document.createElement('li');
@@ -1576,12 +1665,12 @@ function updateSidebar(map, seedStr) {
       labelSpan.className = 'room-label';
       labelSpan.textContent = room.label;
       entry.appendChild(labelSpan);
-      if (room.lead) {
-        const leadSpan = document.createElement('span');
-        leadSpan.className = 'room-lead';
-        leadSpan.textContent = room.lead;
-        entry.appendChild(leadSpan);
-      }
+      const notesArea = document.createElement('textarea');
+      notesArea.className = 'room-notes';
+      notesArea.placeholder = 'Notes...';
+      notesArea.value = room.notes || '';
+      notesArea.addEventListener('input', () => { room.notes = notesArea.value; });
+      entry.appendChild(notesArea);
       li.appendChild(entry);
       roomListEl.appendChild(li);
     }
@@ -1604,11 +1693,9 @@ document.getElementById('randomizeBtn').addEventListener('click', () => {
   seedInput.value = randomSeedWord(rng);
   regenerate();
 });
-monsterSelect.addEventListener('change', () => {
-  customMonsterInput.style.display = monsterSelect.value === 'custom' ? '' : 'none';
-  updateCanvasCursor();
-});
-customMonsterInput.addEventListener('input', updateCanvasCursor);
+titleInput.addEventListener('input', () => { if (currentMap) currentMap.title = titleInput.value; });
+mapNotesEl.addEventListener('input', () => { if (currentMap) currentMap.notes = mapNotesEl.value; });
+addThreatBtn.addEventListener('click', () => setPlacingThreat(!placingThreat));
 showThreatsToggle.addEventListener('change', redraw);
 clearThreatsBtn.addEventListener('click', () => { placedThreats = []; redraw(); });
 canvas.addEventListener('click', (e) => {
@@ -1617,17 +1704,12 @@ canvas.addEventListener('click', (e) => {
   if (!inBounds(currentMap.cols, currentMap.rows, gx, gy)) return;
   const existingIdx = placedThreats.findIndex(p => p.x === gx && p.y === gy);
   if (existingIdx >= 0) { placedThreats.splice(existingIdx, 1); redraw(); return; }
-  let monster = null;
-  if (monsterSelect.value === 'custom') {
-    const name = customMonsterInput.value.trim();
-    if (!name) return;
-    monster = { name, tier: 'Unknown', desc: '' };
-  } else if (monsterSelect.value !== '') {
-    monster = MONSTER_POOLS[currentMap.mapType][parseInt(monsterSelect.value, 10)];
-  }
-  if (!monster) return;
-  placedThreats.push({ x: gx, y: gy, monster });
+  if (!placingThreat) return;
+  placedThreats.push(blankThreat(gx, gy));
   redraw();
+  const nameInputs = threatListEl.querySelectorAll('.threat-name');
+  const last = nameInputs[nameInputs.length - 1];
+  if (last) last.focus({ preventScroll: true });
 });
 document.getElementById('downloadBtn').addEventListener('click', () => {
   if (!currentMap) return;

@@ -5,6 +5,14 @@ horror tabletop games), built as a single self-contained `index.html` —
 no install, no build step. Open the file in a browser, or serve it from
 GitHub Pages.
 
+**The generator's job stops at the map.** It draws terrain, rooms, and
+buildings, and labels each one with a generic type (Study, Ossuary,
+General Store, ...) — none of that is plot. Everything narrative — what's
+actually in a room, who a threat is and what its stats are, what the
+Keeper needs to remember about this location — is a blank field the
+Keeper fills in themselves, right on the map. Nothing here invents a
+storyline for you.
+
 It generates five kinds of location, each with its own algorithm and
 visual style tuned to fit the trope:
 
@@ -20,35 +28,40 @@ visual style tuned to fit the trope:
   shouldn't be opened.
 - **Graveyard** — a walled plot with a gate, gravel paths, scattered
   headstones, a mausoleum or two, dead trees, and (usually) one freshly
-  disturbed grave as a ready-made Keeper hook.
+  disturbed grave.
 - **Village** — a winding main road and side lanes scattered with named
   buildings (General Store, Sheriff's Office, Boarding House, a handful
-  of family residences, ...), each carrying a one-line investigation
-  hook in the sidebar — see "Village locations as a prep sheet" below.
+  of family residences, ...).
 
 Every map is seeded — the same seed + map type always produces the same
 layout, so a Keeper can save or share a seed string to regenerate a
 specific map later. The seed field accepts anything; the dice button
 rolls a themed random one (e.g. `Whispering-Hollow-41`).
 
-**Placing threats**: each map type has its own dropdown of Mythos-flavored
-dangers (plus a "Custom…" option for typing your own). Pick one and click
-the map to drop a numbered marker there; click a marker again (or its ✕
-in the sidebar) to remove it. Placed threats are listed in the sidebar
-with their tier and a line of flavor, numbered to match the markers on
-the map. The "Show markers" checkbox hides the marker overlay without
-losing the placements, so you can flip it off before sharing a clean copy
-of the map with players. Switching map type or generating a new layout
-clears any placed markers, since their grid positions no longer apply.
+**Keeper Notes**: the map title is an editable field (rename it to your
+own town/house/vault), and there's a blank "Keeper Notes" box for the
+map as a whole. Every room, chamber, or building in the sidebar has its
+own blank notes textarea too — that's where the actual scenario lives:
+what's really in the General Store, why the Ossuary matters, what the
+party will find. It's all typed by you, saved only in the browser tab
+for that generated map, and cleared (deliberately — it's tied to that
+specific layout) whenever you generate a new one.
 
-**Village locations as a prep sheet**: most village buildings carry a
-`lead` — one line of investigation flavor tied to that specific
-building ("The evidence locker is missing an item logged three weeks
-ago...") — shown right under its name in the sidebar. It's the same
-idea as placed threats: prep happens once, on the map, and the sidebar
-becomes the thing you actually glance at during a session instead of a
-separate notes doc. A handful of buildings generate locked/boarded-up,
-flagged the same way secret rooms are elsewhere.
+**Placing threats**: click **+ Threat** to arm placement, then click the
+map to drop a numbered marker; click a marker again (or its ✕ in the
+sidebar) to remove it. Each marker opens as a blank Call of Cthulhu 7th
+edition-style stat block — real characteristic fields (STR/CON/SIZ/DEX/
+APP/INT/POW/EDU), plus Move, Armor, Attacks, Skills, Sanity Loss, and
+Notes — with **HP, Magic Points, and Damage Bonus/Build calculated live**
+from whatever numbers you type in, using the actual 7e formulas. No
+creature names, flavor text, or stats are pre-written; this tool can't
+(and shouldn't) reproduce Chaosium's Malleus Monstrorum — the sheet
+structure and derived-stat math are just game mechanics, so filling in
+your own numbers gives you a real, correctly-computed stat block. The
+"Show markers" checkbox hides the marker overlay without losing what
+you've entered, so you can flip it off before sharing a clean copy of
+the map with players. Switching map type or generating a new layout
+clears placed markers, since their grid positions no longer apply.
 
 ## Using it
 
@@ -106,10 +119,11 @@ function — see `index.html`, search for `generateCave`, `generateMansion`,
   "Family," a village "Residence," and (already) a mansion called
   "Ashcombe Hall" can share a surname, so the same seed's worth of
   fictional town feels like one town rather than three unrelated casts.
-- **Threats are Keeper-placed, not generated**: monster markers are never
-  part of a generator's output — they're added afterward, by hand, from
-  `MONSTER_POOLS`, and drawn as a separate overlay pass so they can be
-  hidden (via "Show markers") independently of the base map. Monster
-  flavor text is original and non-mechanical by design — no stat blocks
-  — since Mythos creature names and vibes are fair game for a fan tool
-  but Chaosium's actual Malleus Monstrorum stats aren't ours to reproduce.
+- **Threats are Keeper-authored, not generated**: a placed marker starts
+  completely blank (`blankThreat()`) — no name, no stats, no flavor text.
+  The stat block's derived fields (HP, MP, Damage Bonus/Build) are
+  computed live from the 7e core-rulebook formulas as the Keeper types
+  in characteristics, but the characteristics themselves, and everything
+  else (name, attacks, skills, notes), are entirely the Keeper's own.
+  Markers are drawn as a separate overlay pass after the base map, gated
+  by "Show markers," so they're never part of a generator's output.
