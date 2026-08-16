@@ -27,6 +27,16 @@ layout, so a Keeper can save or share a seed string to regenerate a
 specific map later. The seed field accepts anything; the dice button
 rolls a themed random one (e.g. `Whispering-Hollow-41`).
 
+**Placing threats**: each map type has its own dropdown of Mythos-flavored
+dangers (plus a "Custom…" option for typing your own). Pick one and click
+the map to drop a numbered marker there; click a marker again (or its ✕
+in the sidebar) to remove it. Placed threats are listed in the sidebar
+with their tier and a line of flavor, numbered to match the markers on
+the map. The "Show markers" checkbox hides the marker overlay without
+losing the placements, so you can flip it off before sharing a clean copy
+of the map with players. Switching map type or generating a new layout
+clears any placed markers, since their grid positions no longer apply.
+
 ## Using it
 
 1. Open `index.html` in any modern browser (double-click it, or visit it
@@ -77,3 +87,10 @@ function — see `index.html`, search for `generateCave`, `generateMansion`,
   else — nothing on the map itself gives them away — but are flagged in
   the sidebar's room list so the person running the game knows where
   they are without the map spoiling it visually.
+- **Threats are Keeper-placed, not generated**: monster markers are never
+  part of a generator's output — they're added afterward, by hand, from
+  `MONSTER_POOLS`, and drawn as a separate overlay pass so they can be
+  hidden (via "Show markers") independently of the base map. Monster
+  flavor text is original and non-mechanical by design — no stat blocks
+  — since Mythos creature names and vibes are fair game for a fan tool
+  but Chaosium's actual Malleus Monstrorum stats aren't ours to reproduce.

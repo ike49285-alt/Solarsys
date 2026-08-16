@@ -151,6 +151,35 @@
   ul.room-list li.secret { color: var(--accent-bright); font-style: italic; }
   ul.room-list li::before { content: "•"; color: var(--text-dim); }
   ul.room-list li.secret::before { content: "†"; color: var(--accent-bright); }
+  .threat-hint {
+    font-size: 0.8rem;
+    font-style: italic;
+    color: var(--text-dim);
+    margin: 0 0 0.5rem;
+  }
+  ul.threat-list li { justify-content: space-between; }
+  ul.threat-list li.empty::before { content: ""; }
+  ul.threat-list li.empty { color: var(--text-dim); font-style: italic; }
+  ul.threat-list button {
+    background: transparent;
+    border: 1px solid var(--panel-border);
+    color: var(--text-dim);
+    border-radius: 3px;
+    font-size: 0.72rem;
+    padding: 0.05rem 0.4rem;
+    line-height: 1.5;
+    cursor: pointer;
+  }
+  ul.threat-list button:hover { border-color: var(--accent-bright); color: var(--accent-bright); }
+  .toggle-group {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+  }
+  .toggle-group input { cursor: pointer; }
+  #customMonsterInput { min-width: 8rem; }
   footer {
     padding: 0.6rem 1.25rem;
     font-size: 0.78rem;
@@ -184,6 +213,10 @@
         <input type="text" id="seedInput" placeholder="seed">
         <button id="randomizeBtn" title="Random seed">🎲</button>
       </div>
+      <select id="monsterSelect"><option value="">— place a monster —</option></select>
+      <input type="text" id="customMonsterInput" placeholder="custom name" style="display:none;">
+      <label class="toggle-group"><input type="checkbox" id="showThreatsToggle" checked> Show markers</label>
+      <button id="clearThreatsBtn" title="Remove all placed threats">Clear threats</button>
       <button class="primary" id="generateBtn">Generate</button>
       <button id="downloadBtn">Download PNG</button>
     </div>
@@ -199,6 +232,9 @@
       <ul class="key-list" id="keyList"></ul>
       <h3 id="roomsHeading" style="display:none;">Rooms &amp; Chambers</h3>
       <ul class="room-list" id="roomList"></ul>
+      <h3>Threats <span style="font-weight:normal; text-transform:none; letter-spacing:normal;">(Keeper only)</span></h3>
+      <p class="threat-hint">Pick a monster above, then click the map to place it. Click a placed marker (or its ✕) to remove it.</p>
+      <ul class="room-list threat-list" id="threatList"></ul>
     </aside>
   </main>
   <footer id="footerText">seed: —</footer>
@@ -1005,6 +1041,32 @@ function drawCompass(ctx, x, y, r) {
   ctx.restore();
 }
 
+function drawThreatMarker(ctx, x, y, number, cs) {
+  const px = (x + 0.5) * cs, py = (y + 0.5) * cs;
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.fillStyle = 'rgba(165,52,52,0.94)';
+  ctx.strokeStyle = '#20090a';
+  ctx.lineWidth = 1.5;
+  const spikes = 8, outerR = cs * 0.36, innerR = cs * 0.2;
+  ctx.beginPath();
+  for (let k = 0; k < spikes * 2; k++) {
+    const ang = (k / (spikes * 2)) * Math.PI * 2;
+    const r = k % 2 === 0 ? outerR : innerR;
+    const xx = Math.cos(ang) * r, yy = Math.sin(ang) * r;
+    if (k === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#fdf3e2';
+  ctx.font = `bold ${Math.round(cs * 0.42)}px Georgia, serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(number), 0, 1);
+  ctx.restore();
+}
+
 function renderMap(canvas, map, cellSize) {
   const { cols, rows, grid, features, mapType } = map;
   const palette = PALETTES[mapType];
@@ -1082,6 +1144,45 @@ function renderMap(canvas, map, cellSize) {
 }
 
 /* ---------------------------------------------------------------------
+ * Lurking threats — a per-map-type pool of Mythos-flavored dangers the
+ * Keeper picks from a dropdown and places by clicking the map (click a
+ * placed marker again, or its ✕ in the sidebar, to remove it). Markers
+ * are drawn as a separate overlay pass after the base map, gated by the
+ * "Show markers" toggle, so a Keeper can hide them again before handing
+ * the same map to players.
+ * ------------------------------------------------------------------- */
+const MONSTER_POOLS = {
+  cave: [
+    { name: 'A Deep One outrider', tier: 'Moderate', desc: "Come up from a flooded tunnel to investigate the light. It will retreat if outnumbered — and return with kin if it isn't." },
+    { name: 'A shoggoth remnant', tier: 'Severe', desc: 'A boneless, half-intelligent mass left over from something’s failed experiment. It fills any tunnel it moves through.' },
+    { name: 'A mining party of Mi-Go', tier: 'Severe', desc: 'Fungoid things from beyond the stars, here for the rock itself. They will negotiate before they fight.' },
+    { name: 'Ghouls, feasting', tier: 'Moderate', desc: 'They knew this cave before anyone mapped it. Not hostile unless cornered — but always hungry.' },
+    { name: 'Something not listed in any bestiary', tier: 'Extreme', desc: "The idol wasn't carved to be looked at. Best not to describe it directly until it's already too late." },
+  ],
+  mansion: [
+    { name: 'A star vampire, unseen', tier: 'Severe', desc: 'Invisible but for a faint outline against dust and steam. It has fed on the household, unnoticed, for years.' },
+    { name: 'A dimensional shambler, house-bound', tier: 'Severe', desc: 'Summoned decades ago and never properly dismissed. It knows the halls better than the living residents do.' },
+    { name: 'The last surviving cultist', tier: 'Low', desc: 'Elderly, devoted, and utterly convinced the ritual just needs one more try. Not dangerous alone — but not alone for long.' },
+    { name: 'A byakhee, roosting', tier: 'Moderate', desc: 'Something the family patriarch called down and could never quite send back. It sleeps between summonings.' },
+    { name: 'Whatever answers when the sigil is completed', tier: 'Extreme', desc: 'Nothing lives here yet. But someone careless is one completed ritual away from changing that.' },
+  ],
+  crypt: [
+    { name: 'Ghouls, several generations deep', tier: 'Moderate', desc: 'This vault has fed a ghoul warren for longer than the family upstairs has existed.' },
+    { name: 'A hound of Tindalos, drawn by the angles', tier: 'Severe', desc: "The corners down here are all wrong. Something noticed." },
+    { name: "The vault's rightful occupant, unburied", tier: 'Severe', desc: "The sarcophagus lid doesn't sit flush anymore. It hasn't for a while." },
+    { name: 'A swarm of grave-things', tier: 'Low', desc: 'Small, many, and individually harmless. Collectively, a very bad afternoon.' },
+    { name: 'Something the family paid to keep buried', tier: 'Extreme', desc: "There's a reason this chamber was sealed rather than simply locked." },
+  ],
+  graveyard: [
+    { name: 'A ghoul pack, freshly arrived', tier: 'Moderate', desc: "They followed the scent of the disturbed grave, and won't leave until it's empty." },
+    { name: 'The recently deceased, restless', tier: 'Moderate', desc: "Buried in haste, for reasons the family won't discuss. Doesn't seem to have noticed it's dead yet." },
+    { name: 'A dark young, transplanted', tier: 'Severe', desc: "Something's been growing in the mausoleum's foundation. It's not a tree root." },
+    { name: 'The groundskeeper, no longer entirely himself', tier: 'Low', desc: 'Still does the rounds every night. Still rings the gate bell. Hasn’t drawn breath in some time.' },
+    { name: 'Whatever the cultists came here to wake up', tier: 'Extreme', desc: "The disturbed earth wasn't an accident, and it wasn't grave robbers." },
+  ],
+};
+
+/* ---------------------------------------------------------------------
  * App wiring
  * ------------------------------------------------------------------- */
 const SIZES = {
@@ -1094,6 +1195,7 @@ const CELL_SIZE = 18;
 
 const state = { type: 'cave' };
 let currentMap = null;
+let placedThreats = [];
 
 const canvas = document.getElementById('mapCanvas');
 const seedInput = document.getElementById('seedInput');
@@ -1104,6 +1206,11 @@ const flavorEl = document.getElementById('mapFlavor');
 const keyListEl = document.getElementById('keyList');
 const roomListEl = document.getElementById('roomList');
 const roomsHeadingEl = document.getElementById('roomsHeading');
+const threatListEl = document.getElementById('threatList');
+const monsterSelect = document.getElementById('monsterSelect');
+const customMonsterInput = document.getElementById('customMonsterInput');
+const showThreatsToggle = document.getElementById('showThreatsToggle');
+const clearThreatsBtn = document.getElementById('clearThreatsBtn');
 const footerEl = document.getElementById('footerText');
 
 const ADJ = ["Whispering", "Hollow", "Forgotten", "Shrouded", "Withered", "Silent", "Drowned", "Gnarled", "Pale", "Nameless"];
@@ -1112,11 +1219,83 @@ function randomSeedWord(rng) {
   return `${ADJ[Math.floor(rng() * ADJ.length)]}-${NOUN[Math.floor(rng() * NOUN.length)]}-${Math.floor(rng() * 90 + 10)}`;
 }
 
+function populateMonsterSelect(type) {
+  const pool = MONSTER_POOLS[type];
+  monsterSelect.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = '— place a monster —';
+  monsterSelect.appendChild(placeholder);
+  pool.forEach((m, i) => {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = `${m.name} [${m.tier}]`;
+    monsterSelect.appendChild(opt);
+  });
+  const customOpt = document.createElement('option');
+  customOpt.value = 'custom';
+  customOpt.textContent = 'Custom…';
+  monsterSelect.appendChild(customOpt);
+  monsterSelect.value = '';
+  customMonsterInput.style.display = 'none';
+  customMonsterInput.value = '';
+  updateCanvasCursor();
+}
+
+function updateCanvasCursor() {
+  const active = monsterSelect.value === 'custom'
+    ? customMonsterInput.value.trim().length > 0
+    : monsterSelect.value !== '';
+  canvas.style.cursor = active ? 'crosshair' : 'default';
+}
+
+function cellFromEvent(e) {
+  const rect = canvas.getBoundingClientRect();
+  const gx = Math.floor((e.clientX - rect.left) / (rect.width / currentMap.cols));
+  const gy = Math.floor((e.clientY - rect.top) / (rect.height / currentMap.rows));
+  return { gx, gy };
+}
+
+function updateThreatList() {
+  threatListEl.innerHTML = '';
+  if (!placedThreats.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'None placed yet.';
+    threatListEl.appendChild(li);
+    return;
+  }
+  placedThreats.forEach((t, i) => {
+    const li = document.createElement('li');
+    li.classList.add('secret');
+    const span = document.createElement('span');
+    span.textContent = `${i + 1}. ${t.monster.name}${t.monster.tier ? ' [' + t.monster.tier + ']' : ''}`;
+    li.appendChild(span);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '✕';
+    btn.title = 'Remove this marker';
+    btn.addEventListener('click', () => { placedThreats.splice(i, 1); redraw(); });
+    li.appendChild(btn);
+    threatListEl.appendChild(li);
+  });
+}
+
+function redraw() {
+  renderMap(canvas, currentMap, CELL_SIZE);
+  if (showThreatsToggle.checked) {
+    const ctx = canvas.getContext('2d');
+    placedThreats.forEach((t, i) => drawThreatMarker(ctx, t.x, t.y, i + 1, CELL_SIZE));
+  }
+  updateThreatList();
+}
+
 function setActiveType(type) {
   state.type = type;
   for (const btn of typeGroup.querySelectorAll('.type-btn')) {
     btn.classList.toggle('active', btn.dataset.type === type);
   }
+  populateMonsterSelect(type);
 }
 
 function regenerate() {
@@ -1125,8 +1304,9 @@ function regenerate() {
   const { cols, rows } = SIZES[sizeSelect.value];
   const gen = GENERATORS[state.type];
   currentMap = gen(cols, rows, rng);
-  renderMap(canvas, currentMap, CELL_SIZE);
+  placedThreats = [];
   updateSidebar(currentMap, seedStr);
+  redraw();
 }
 
 function updateSidebar(map, seedStr) {
@@ -1179,6 +1359,31 @@ document.getElementById('randomizeBtn').addEventListener('click', () => {
   const rng = mulberry32((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0);
   seedInput.value = randomSeedWord(rng);
   regenerate();
+});
+monsterSelect.addEventListener('change', () => {
+  customMonsterInput.style.display = monsterSelect.value === 'custom' ? '' : 'none';
+  updateCanvasCursor();
+});
+customMonsterInput.addEventListener('input', updateCanvasCursor);
+showThreatsToggle.addEventListener('change', redraw);
+clearThreatsBtn.addEventListener('click', () => { placedThreats = []; redraw(); });
+canvas.addEventListener('click', (e) => {
+  if (!currentMap) return;
+  const { gx, gy } = cellFromEvent(e);
+  if (!inBounds(currentMap.cols, currentMap.rows, gx, gy)) return;
+  const existingIdx = placedThreats.findIndex(p => p.x === gx && p.y === gy);
+  if (existingIdx >= 0) { placedThreats.splice(existingIdx, 1); redraw(); return; }
+  let monster = null;
+  if (monsterSelect.value === 'custom') {
+    const name = customMonsterInput.value.trim();
+    if (!name) return;
+    monster = { name, tier: 'Unknown', desc: '' };
+  } else if (monsterSelect.value !== '') {
+    monster = MONSTER_POOLS[currentMap.mapType][parseInt(monsterSelect.value, 10)];
+  }
+  if (!monster) return;
+  placedThreats.push({ x: gx, y: gy, monster });
+  redraw();
 });
 document.getElementById('downloadBtn').addEventListener('click', () => {
   if (!currentMap) return;

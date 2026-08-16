@@ -43,6 +43,15 @@ Everything lives in `index.html`'s one `<script>` block:
   (drawn once, only on edges between non-wall and wall, so it works for
   every map type without per-type special-casing) → door glyphs →
   features → frame/compass. `PALETTES` holds per-map-type colors.
+- **Lurking threats**: `MONSTER_POOLS` (per map type) is reference data
+  only, not generator output — nothing places a threat automatically.
+  The Keeper picks one from `#monsterSelect` (repopulated per type by
+  `populateMonsterSelect`, plus a "Custom…" option backed by
+  `#customMonsterInput`) and clicks the canvas to place it; the click
+  handler and `placedThreats` array live in the App wiring section.
+  `drawThreatMarker` draws each placement as a numbered overlay *after*
+  `renderMap` returns (see `redraw()`), gated by `#showThreatsToggle`,
+  so markers are never part of the generator's own grid/features output.
 - **App wiring** at the bottom: DOM lookups, `regenerate()`,
   `updateSidebar()`, event listeners, `init()` IIFE that runs on load.
 
@@ -90,6 +99,18 @@ indistinguishable on the canvas itself** — same wall/door rendering as
 any other room. The only place a secret room is revealed is the sidebar
 room list (marked with `†`), which is meant for the Keeper's eyes, not
 the players'. If you add new secret-room types, follow this convention.
+
+Lurking threats work differently on purpose: unlike secret rooms, a
+placed monster *is* drawn as its own marker (`drawThreatMarker`) — that's
+the point, the Keeper is placing it deliberately, not the generator
+hiding it. What keeps this from spoiling a player-facing map is the
+`#showThreatsToggle`: markers must stay a separate overlay pass drawn
+*after* `renderMap`/`redraw()`, never baked into the generator's own
+`features`/`grid` output, so hiding them is always just "redraw without
+the overlay," not "regenerate a different map." Keep monster flavor text
+original/non-mechanical (no stat blocks) — Mythos creature names and
+vibes are fair game, but Chaosium's actual Malleus Monstrorum stats are
+not ours to reproduce.
 
 ## Known intentional loose ends
 
