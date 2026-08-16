@@ -19,6 +19,13 @@ is in `README.md` — read that before changing generator behavior, so
 changes stay consistent with the existing visual language rather than
 introducing a second style.
 
+**Primary target is mobile Safari, phone-in-hand at the table** — not a
+desktop app that also happens to work on mobile. When a design decision
+could go either way, default to what works one-handed on a phone
+screen (touch targets, zoom/pan, layout stacking at 390px) and treat
+desktop as the thing that also has to keep working, not the other way
+around.
+
 **Core boundary, set deliberately by the project owner: this tool
 generates the map and nothing else.** Terrain, room/building geometry,
 and generic type labels (Study, Ossuary, General Store) are the
@@ -86,6 +93,21 @@ Everything lives in `index.html`'s one `<script>` block:
   draws each placement as a numbered overlay *after* `renderMap` returns
   (see `redraw()`), gated by `#showThreatsToggle`, so markers are never
   part of the generator's own grid/features output.
+- **Map viewer (zoom/pan)**: `view = { scale, x, y }` drives a CSS
+  `translate()+scale()` transform on the canvas element — the canvas
+  bitmap itself is never redrawn for this. `fitView()` sizes/centers it
+  to the current `.canvas-wrap` on load, on `regenerate()`, and on
+  window `resize` (covers phone rotation). Touch pinch/pan, wheel-zoom,
+  and mouse-drag-pan all just mutate `view` and call `applyView()`.
+  `cellFromEvent` keeps working unchanged at any zoom because
+  `getBoundingClientRect()` already reports the transformed box — don't
+  reintroduce a separate coordinate-conversion path for zoomed state.
+  `.canvas-wrap` uses `position: relative` + the canvas
+  `position: absolute; top:0; left:0` (not flexbox centering) so the
+  canvas's untransformed origin is deterministic and matches what
+  `fitView()`'s math assumes — flexbox centering here was a real bug
+  once (double-offset against the transform math), so don't bring it
+  back for "simplicity."
 - **App wiring** at the bottom: DOM lookups, `regenerate()`,
   `updateSidebar()`, event listeners, `init()` IIFE that runs on load.
 

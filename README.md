@@ -66,12 +66,23 @@ clears placed markers, since their grid positions no longer apply.
 ## Using it
 
 1. Open `index.html` in any modern browser (double-click it, or visit it
-   via GitHub Pages).
+   via GitHub Pages). Built to work first as a phone-in-hand tool at the
+   table in mobile Safari, not just at a desk.
 2. Pick a map type, a size (Small / Medium / Large), and optionally type
    a seed.
 3. Click **Generate**. Click it again (or the dice) for a new location.
 4. **Download PNG** saves the current canvas as an image for use at the
    table or in a VTT.
+
+**Zoom and pan**: the map loads fit to the screen, then it's yours to
+move around — pinch to zoom and drag with one finger on a touchscreen,
+or scroll/wheel to zoom and click-drag with a mouse. This is a viewer
+transform on top of the drawn map, independent of the browser's own
+page zoom, so it stays sharp and doesn't drag the header/sidebar along
+with it. **Reset View** snaps back to the initial fit-to-screen framing
+(also happens automatically on generate, and on rotating/resizing the
+window). Placing or removing a threat marker still lands on the exact
+grid cell under your finger/cursor at whatever zoom level you're at.
 
 The sidebar shows the map's title, a short flavor line, a key explaining
 the symbols on the map, and — for mansions, crypts, graveyards, and

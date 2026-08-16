@@ -97,14 +97,21 @@
     background: #050403;
     border: 1px solid var(--panel-border);
     border-radius: 4px;
-    overflow: auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
+    overflow: hidden;
+    position: relative;
     min-height: 60vh;
+    touch-action: none;
+    cursor: grab;
   }
-  canvas { display: block; image-rendering: crisp-edges; }
+  .canvas-wrap.grabbing { cursor: grabbing; }
+  canvas {
+    display: block;
+    image-rendering: crisp-edges;
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: 0 0;
+  }
   aside {
     background: var(--panel);
     border: 1px solid var(--panel-border);
@@ -312,6 +319,7 @@
       <button id="clearThreatsBtn" title="Remove all placed threats">Clear threats</button>
       <button class="primary" id="generateBtn">Generate</button>
       <button id="downloadBtn">Download PNG</button>
+      <button id="resetViewBtn" title="Re-fit the map to the screen">Reset View</button>
     </div>
   </header>
   <main>
@@ -1327,7 +1335,7 @@ function drawThreatMarker(ctx, x, y, number, cs) {
 function renderMap(canvas, map, cellSize) {
   const { cols, rows, grid, features, mapType } = map;
   const palette = PALETTES[mapType];
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const dpr = Math.min(window.devicePixelRatio || 1, 3); // headroom for pinch-zoom past 1:1
   const wPx = cols * cellSize, hPx = rows * cellSize;
   canvas.width = Math.round(wPx * dpr);
   canvas.height = Math.round(hPx * dpr);
@@ -1461,6 +1469,7 @@ let currentMap = null;
 let placedThreats = [];
 
 const canvas = document.getElementById('mapCanvas');
+const canvasWrap = document.querySelector('.canvas-wrap');
 const seedInput = document.getElementById('seedInput');
 const sizeSelect = document.getElementById('sizeSelect');
 const typeGroup = document.getElementById('typeGroup');
@@ -1477,6 +1486,123 @@ const clearThreatsBtn = document.getElementById('clearThreatsBtn');
 const footerEl = document.getElementById('footerText');
 
 let placingThreat = false;
+
+/* ---------------------------------------------------------------------
+ * Map viewer — pinch-zoom and drag-pan for the canvas, independent of
+ * the page's own zoom. Needed because this runs mostly as a phone-in-
+ * hand tool at the table (Safari/iOS first) where a map wider than the
+ * screen has to be something you can pinch into, not just scroll.
+ * The canvas itself is never re-drawn for this — it's a CSS
+ * translate+scale transform on the existing bitmap, so cellFromEvent's
+ * getBoundingClientRect()-based math keeps working unchanged at any
+ * zoom level (the browser reports the transformed box).
+ * ------------------------------------------------------------------- */
+const MIN_SCALE = 0.4, MAX_SCALE = 5;
+let view = { scale: 1, x: 0, y: 0 };
+let touchState = null;
+let dragState = null;
+
+function applyView() {
+  canvas.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+}
+
+function clampScale(s) { return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s)); }
+
+// Zoom while keeping the point at (px, py) — in canvasWrap-local
+// coordinates — visually stationary under the fingers/cursor.
+function zoomAt(px, py, factor, fromScale, fromX, fromY) {
+  const newScale = clampScale(fromScale * factor);
+  const ratio = newScale / fromScale;
+  view.scale = newScale;
+  view.x = px - (px - fromX) * ratio;
+  view.y = py - (py - fromY) * ratio;
+  applyView();
+}
+
+// Fit the whole map into the visible wrap on load/regenerate/resize —
+// never auto-zooms in past 1:1, only ever shrinks an oversized map
+// down to fit (a phone screen is almost always narrower than a
+// Medium/Large map at native cell size).
+function fitView() {
+  if (!currentMap) return;
+  const rect = canvasWrap.getBoundingClientRect();
+  const wPx = currentMap.cols * CELL_SIZE, hPx = currentMap.rows * CELL_SIZE;
+  const innerW = rect.width - 32, innerH = rect.height - 32; // minus wrap padding
+  const fitScale = Math.min(innerW / wPx, innerH / hPx, 1);
+  view.scale = clampScale(fitScale);
+  view.x = (rect.width - wPx * view.scale) / 2;
+  view.y = (rect.height - hPx * view.scale) / 2;
+  applyView();
+}
+
+canvasWrap.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 2) {
+    const [t1, t2] = e.touches;
+    const rect = canvasWrap.getBoundingClientRect();
+    touchState = {
+      mode: 'pinch',
+      startDist: Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY),
+      startScale: view.scale,
+      startX: view.x, startY: view.y,
+      midX: (t1.clientX + t2.clientX) / 2 - rect.left,
+      midY: (t1.clientY + t2.clientY) / 2 - rect.top,
+    };
+  } else if (e.touches.length === 1) {
+    touchState = { mode: 'pan', lastX: e.touches[0].clientX, lastY: e.touches[0].clientY };
+  }
+}, { passive: true });
+
+canvasWrap.addEventListener('touchmove', (e) => {
+  if (!touchState) return;
+  if (touchState.mode === 'pinch' && e.touches.length === 2) {
+    e.preventDefault();
+    const [t1, t2] = e.touches;
+    const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    zoomAt(touchState.midX, touchState.midY, dist / touchState.startDist, touchState.startScale, touchState.startX, touchState.startY);
+  } else if (touchState.mode === 'pan' && e.touches.length === 1) {
+    e.preventDefault();
+    const t = e.touches[0];
+    view.x += t.clientX - touchState.lastX;
+    view.y += t.clientY - touchState.lastY;
+    touchState.lastX = t.clientX;
+    touchState.lastY = t.clientY;
+    applyView();
+  }
+}, { passive: false });
+
+function endTouch(e) {
+  if (e.touches.length === 0) touchState = null;
+  else if (e.touches.length === 1) touchState = { mode: 'pan', lastX: e.touches[0].clientX, lastY: e.touches[0].clientY };
+}
+canvasWrap.addEventListener('touchend', endTouch);
+canvasWrap.addEventListener('touchcancel', () => { touchState = null; });
+
+canvasWrap.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const rect = canvasWrap.getBoundingClientRect();
+  const factor = Math.exp(-e.deltaY * 0.0015);
+  zoomAt(e.clientX - rect.left, e.clientY - rect.top, factor, view.scale, view.x, view.y);
+}, { passive: false });
+
+canvasWrap.addEventListener('mousedown', (e) => {
+  dragState = { moved: false, startX: e.clientX, startY: e.clientY, viewX: view.x, viewY: view.y };
+  canvasWrap.classList.add('grabbing');
+});
+window.addEventListener('mousemove', (e) => {
+  if (!dragState) return;
+  const dx = e.clientX - dragState.startX, dy = e.clientY - dragState.startY;
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragState.moved = true;
+  if (dragState.moved) {
+    view.x = dragState.viewX + dx;
+    view.y = dragState.viewY + dy;
+    applyView();
+  }
+});
+window.addEventListener('mouseup', () => {
+  canvasWrap.classList.remove('grabbing');
+  if (dragState && !dragState.moved) dragState = null;
+});
+window.addEventListener('resize', () => fitView());
 
 const ADJ = ["Whispering", "Hollow", "Forgotten", "Shrouded", "Withered", "Silent", "Drowned", "Gnarled", "Pale", "Nameless"];
 const NOUN = ["Hollow", "Reach", "Fen", "Barrow", "Hollowgate", "Mire", "Cairn", "Vault", "Thicket", "Passage"];
@@ -1626,6 +1752,7 @@ function regenerate() {
   setPlacingThreat(false);
   updateSidebar(currentMap, seedStr);
   redraw();
+  fitView();
 }
 
 function updateSidebar(map, seedStr) {
@@ -1699,6 +1826,7 @@ addThreatBtn.addEventListener('click', () => setPlacingThreat(!placingThreat));
 showThreatsToggle.addEventListener('change', redraw);
 clearThreatsBtn.addEventListener('click', () => { placedThreats = []; redraw(); });
 canvas.addEventListener('click', (e) => {
+  if (dragState) { dragState = null; return; }
   if (!currentMap) return;
   const { gx, gy } = cellFromEvent(e);
   if (!inBounds(currentMap.cols, currentMap.rows, gx, gy)) return;
@@ -1719,6 +1847,7 @@ document.getElementById('downloadBtn').addEventListener('click', () => {
   link.href = canvas.toDataURL('image/png');
   link.click();
 });
+document.getElementById('resetViewBtn').addEventListener('click', fitView);
 
 (function init() {
   const initRng = mulberry32((Date.now() ^ 0x9e3779b9) >>> 0);
