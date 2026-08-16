@@ -7,8 +7,8 @@ Read this before making changes.
 ## What this is
 
 `index.html` is a single self-contained procedural map generator for
-Call of Cthulhu, covering four location types: caves, mansions, crypts,
-and graveyards. No build tooling, no dependencies — it's plain HTML/CSS
+Call of Cthulhu, covering five location types: caves, mansions, crypts,
+graveyards, and villages. No build tooling, no dependencies — it's plain HTML/CSS
 and vanilla JS in one file, opens directly in a browser or serves
 straight off GitHub Pages. There is no separate source file to build
 from; `index.html` **is** the source. Edit it directly.
@@ -32,13 +32,27 @@ Everything lives in `index.html`'s one `<script>` block:
   `findRegions` (flood fill, used to detect and reconnect isolated cave
   pockets), `carveLine` (biased random walk between two points, used for
   tunnel-connecting regions).
-- **Four generators**, each a standalone function returning
+- **Five generators**, each a standalone function returning
   `{ cols, rows, grid, features, rooms, mapType, title, flavor, key }`:
-  `generateCave`, `generateMansion`, `generateCrypt`, `generateGraveyard`.
-  `features` is an array of `{ type, x, y, ... }` glyphs drawn on top of
-  the grid (headstones, sarcophagi, furniture, etc.) — see `drawFeature`
-  for the full switch of supported types. `rooms` is only populated by
-  mansion/crypt/graveyard (named rooms/chambers, some flagged `secret`).
+  `generateCave`, `generateMansion`, `generateCrypt`, `generateGraveyard`,
+  `generateVillage`. `features` is an array of `{ type, x, y, ... }`
+  glyphs drawn on top of the grid (headstones, sarcophagi, furniture,
+  a village well, etc.) — see `drawFeature` for the full switch of
+  supported types. `rooms` is only populated by mansion/crypt/graveyard/
+  village (named rooms/chambers/buildings, some flagged `secret`).
+  `ROOM_HEADINGS` maps mapType to that section's sidebar heading text
+  ("Village Locations" vs. "Rooms & Chambers" elsewhere) — add an entry
+  there for any new map type that populates `rooms`.
+- **Investigation leads**: a village room may also carry a `lead` — a
+  one-line, building-specific investigation hook string. `updateSidebar`
+  renders it under the room's label (`.room-lead`) whenever present; it's
+  optional per room, so this is safe to leave unset on other map types
+  rather than adding empty leads everywhere.
+- **Shared surname pool**: `SURNAME_POOL` (top-level, near `carveLine`)
+  is used by both `generateGraveyard` (mausolea) and `generateVillage`
+  (family residences, and the "no one will say why the ___ place has
+  stood empty" flavor line) so the same families recur across a seed's
+  worth of map types instead of each generator inventing its own cast.
 - **Renderer**: `renderMap` draws terrain fill → ink boundary outline
   (drawn once, only on edges between non-wall and wall, so it works for
   every map type without per-type special-casing) → door glyphs →
@@ -74,11 +88,12 @@ project, worth reusing for changes:
   (`/opt/node22/lib/node_modules/playwright/node_modules/playwright-core`),
   launched with `executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'`,
   `args: ['--no-sandbox']` — do NOT run `playwright install`.
-- Click through all four map types, and re-generate several times per
+- Click through all five map types, and re-generate several times per
   type (different seeds) — single-seed testing will miss generator bugs
   that only occur for some random layouts (e.g. a BSP split that
   produces a degenerate 0-width room, a crypt spine that walks off the
-  grid edge).
+  grid edge, a village's rejection-sampled buildings landing far short
+  of the target count on an unlucky seed).
 - Check both `page.on('pageerror')` and `page.on('console')` for errors,
   and pull real pixel data via `getImageData` (or at minimum a
   screenshot you actually look at) rather than assuming "canvas.width is
@@ -87,14 +102,18 @@ project, worth reusing for changes:
   (390px) — the header control row uses `flexWrap` for this; don't
   remove it.
 
-**3. Keep the four generators visually distinct on purpose.** Caves and
+**3. Keep the five generators visually distinct on purpose.** Caves and
 crypts are "carved out of a solid mass" (depth-shaded rock/earth,
-organic or winding shapes). Mansions and graveyards are "built"
-(thin single-cell walls/fences, flat colors, rectilinear). Don't
+organic or winding shapes). Mansions, graveyards, and villages are
+"built" (thin single-cell walls/fences, flat colors, rectilinear). Don't
 homogenize these without a reason — the contrast is what makes each map
-type read correctly at a glance.
+type read correctly at a glance. Within the "built" group, keep each
+type's own identity too — village isn't just a graveyard with more
+buildings: it has no perimeter wall (open, not enclosed), a browner/
+woodier palette than graveyard's greens, and roads instead of gravel
+paths radiating from a gate.
 
-**4. Rooms/chambers with `secret: true` must stay visually
+**4. Rooms/chambers/buildings with `secret: true` must stay visually
 indistinguishable on the canvas itself** — same wall/door rendering as
 any other room. The only place a secret room is revealed is the sidebar
 room list (marked with `†`), which is meant for the Keeper's eyes, not

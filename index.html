@@ -148,9 +148,18 @@
     border: 1px solid rgba(0,0,0,0.4);
     flex: none;
   }
+  ul.room-list li { align-items: flex-start; }
   ul.room-list li.secret { color: var(--accent-bright); font-style: italic; }
   ul.room-list li::before { content: "•"; color: var(--text-dim); }
   ul.room-list li.secret::before { content: "†"; color: var(--accent-bright); }
+  .room-entry { display: flex; flex-direction: column; gap: 0.2rem; }
+  .room-lead {
+    font-size: 0.78rem;
+    font-style: italic;
+    color: var(--text-dim);
+    line-height: 1.35;
+  }
+  ul.room-list li.secret .room-lead { color: var(--accent-bright); }
   .threat-hint {
     font-size: 0.8rem;
     font-style: italic;
@@ -196,13 +205,14 @@
 <div id="app">
   <header>
     <h1>Eldritch Cartographer</h1>
-    <p class="subtitle">Procedural handout maps for Call of Cthulhu keepers — caves, mansions, crypts, and graveyards.</p>
+    <p class="subtitle">Procedural handout maps for Call of Cthulhu keepers — caves, mansions, crypts, graveyards, and villages.</p>
     <div class="controls">
       <div class="type-group" id="typeGroup">
         <button class="type-btn" data-type="cave">Cave</button>
         <button class="type-btn" data-type="mansion">Mansion</button>
         <button class="type-btn" data-type="crypt">Crypt</button>
         <button class="type-btn" data-type="graveyard">Graveyard</button>
+        <button class="type-btn" data-type="village">Village</button>
       </div>
       <select id="sizeSelect">
         <option value="small">Small</option>
@@ -339,6 +349,11 @@ function carveLine(grid, cols, rows, x0, y0, x1, y1, rng, width, type) {
   }
   setFloor(x1, y1);
 }
+
+// Shared across generators so recurring family names read as the same
+// fictional town's families, not a fresh cast per map type.
+const SURNAME_POOL = ["Ashcombe", "Whitfield", "Corbin", "Marsh", "Blackwood",
+  "Pemberton", "Corwin", "Osgood", "Blackthorn", "Hargrove"];
 
 /* ---------------------------------------------------------------------
  * Cave generator — cellular automata
@@ -724,8 +739,7 @@ function generateGraveyard(cols, rows, rng) {
       else if (doorSide === 2) { dx2 = mx; dy2 = my + Math.floor(mh / 2); }
       else { dx2 = mx + mw - 1; dy2 = my + Math.floor(mh / 2); }
       grid[idx(cols, dx2, dy2)] = DOOR;
-      const surnamePool = ["Ashcombe", "Whitfield", "Corbin", "Marsh", "Blackwood", "Pemberton"];
-      const room = { x: mx, y: my, w: mw, h: mh, label: `Mausoleum of the ${surnamePool[Math.floor(rng() * surnamePool.length)]} Family` };
+      const room = { x: mx, y: my, w: mw, h: mh, label: `Mausoleum of the ${SURNAME_POOL[Math.floor(rng() * SURNAME_POOL.length)]} Family` };
       rooms.push(room);
       features.push({ type: 'sarcophagus', x: mx + Math.floor(mw / 2), y: my + Math.floor(mh / 2), room });
       break;
@@ -791,6 +805,201 @@ function generateGraveyard(cols, rows, rng) {
 }
 
 /* ---------------------------------------------------------------------
+ * Village generator — a main road + side lanes, scattered buildings.
+ * Each building is a small named "room" the same way mansion rooms are,
+ * but most also carry a `lead` — a one-line investigation hook — so the
+ * sidebar doubles as a prep sheet: where the Keeper seeded what, at a
+ * glance, without digging back through notes mid-session.
+ * ------------------------------------------------------------------- */
+function generateVillage(cols, rows, rng) {
+  const grid = makeGrid(cols, rows, FLOOR);
+  const features = [];
+
+  const vertical = rng() < 0.5;
+  if (vertical) {
+    let rx = Math.floor(cols * (0.3 + rng() * 0.4));
+    for (let ry = 0; ry < rows; ry++) {
+      if (rng() < 0.22) rx += rng() < 0.5 ? 1 : -1;
+      rx = Math.max(2, Math.min(cols - 4, rx));
+      grid[idx(cols, rx, ry)] = PATH;
+      grid[idx(cols, rx + 1, ry)] = PATH;
+    }
+  } else {
+    let ry = Math.floor(rows * (0.3 + rng() * 0.4));
+    for (let rx = 0; rx < cols; rx++) {
+      if (rng() < 0.22) ry += rng() < 0.5 ? 1 : -1;
+      ry = Math.max(2, Math.min(rows - 4, ry));
+      grid[idx(cols, rx, ry)] = PATH;
+      grid[idx(cols, rx, ry + 1)] = PATH;
+    }
+  }
+  const laneCount = 3 + Math.floor(rng() * 4);
+  for (let b = 0; b < laneCount; b++) {
+    let bx = 2 + Math.floor(rng() * (cols - 4));
+    let by = 2 + Math.floor(rng() * (rows - 4));
+    const steps = 6 + Math.floor(rng() * 10);
+    const ddx = rng() < 0.5 ? 1 : -1;
+    for (let s = 0; s < steps; s++) {
+      if (!inBounds(cols, rows, bx, by)) break;
+      if (grid[idx(cols, bx, by)] === FLOOR) grid[idx(cols, bx, by)] = PATH;
+      if (rng() < 0.6) bx += ddx; else by += rng() < 0.5 ? 1 : -1;
+      bx = Math.max(1, Math.min(cols - 2, bx));
+      by = Math.max(1, Math.min(rows - 2, by));
+    }
+  }
+
+  const LOCATIONS = [
+    { label: 'General Store', furniture: 'crate', leads: [
+      "The ledger shows a spike in kerosene and rope purchases last month, all to the same buyer.",
+      "The shopkeeper keeps a second, unofficial ledger under the counter — cash sales he doesn't want traced.",
+    ] },
+    { label: "Sheriff's Office", furniture: 'desk', leads: [
+      "A missing-persons file for a name none of the townsfolk will discuss.",
+      "The evidence locker is missing an item logged three weeks ago — the paperwork says it was never checked out.",
+    ] },
+    { label: "Doctor's House", furniture: 'desk', leads: [
+      "Patient notes describe symptoms that don't match any diagnosis the doctor ever wrote down.",
+      "A locked drawer holds X-rays the doctor insists were 'inconclusive.'",
+    ] },
+    { label: 'Boarding House', furniture: 'bed', leads: [
+      "The guest registry has a name crossed out so hard the pen tore the page.",
+      "Room 4 has been paid for a year in advance by someone the landlady has never met.",
+    ] },
+    { label: 'The Anchor Inn', furniture: 'table', leads: [
+      "The regulars go quiet whenever a stranger asks about the old lighthouse.",
+      "The barkeep waters down more than the whiskey — ask about last month's storm and he changes the subject.",
+    ] },
+    { label: 'Chapel', furniture: null, leads: [
+      "The burial register lists a date of death that hasn't happened yet.",
+      "The reverend has stopped giving Sunday sermons, and no one will say why.",
+    ] },
+    { label: 'Post Office', furniture: 'desk', leads: [
+      "A parcel addressed to someone who died two years ago was delivered anyway — and accepted.",
+      "Outgoing mail to a research institute has doubled since spring, all from the same house.",
+    ] },
+    { label: 'Blacksmith', furniture: 'crate', leads: [
+      "An order for heavy iron chains, more than anyone local could need, was picked up in the middle of the night.",
+      "The smith has been melting down old ship fittings. Ask where they came from and he won't meet your eyes.",
+    ] },
+    { label: "Fisherman's Shack", furniture: 'crate', leads: [
+      "The nets keep coming back torn in ways no fish could manage.",
+      "Someone's been paying well over market price for anything hauled up from the water past the point.",
+    ] },
+    { label: 'Schoolhouse', furniture: 'bookshelf', leads: [
+      "A student stopped attending three weeks ago; the teacher still marks him present.",
+      "A child's drawing pinned to the wall shows something that isn't in any of the picture books.",
+    ] },
+    { label: 'Newspaper Office', furniture: 'desk', leads: [
+      "The morgue file on last year's drownings is missing its photographs.",
+      "A reporter's desk sits untouched since she left to 'follow up a lead' at the old quarry.",
+    ] },
+    { label: 'Town Hall', furniture: 'bookshelf', leads: [
+      "Property records show the old mill changed hands for exactly one dollar, three times in ten years.",
+      "A zoning variance was quietly approved for a building that appears on no survey since.",
+    ] },
+    { label: 'Antiques & Curiosities', furniture: 'crate', leads: [
+      "An item in the back room is kept under a cloth, and the owner won't say why.",
+      "A ledger of provenance for one item traces back to a ship reported lost at sea.",
+    ] },
+    { label: 'Family Residence', familyName: true, furniture: 'table', leads: [
+      "A grown child moved back home suddenly and hasn't been seen leaving the house since.",
+      "The curtains are drawn at all hours, and the woodpile hasn't been touched all winter.",
+    ] },
+  ];
+  const SECRET_LOCATIONS = [
+    { label: 'Boarded-Up Cottage', furniture: null, leads: [
+      "Nailed shut from the outside — someone wanted whatever's inside to stay in, not out.",
+    ] },
+    { label: 'Locked Storm Cellar', furniture: null, leads: [
+      "The padlock is new. The door beneath it is not.",
+    ] },
+    { label: 'Abandoned Chandlery', furniture: 'crate', leads: [
+      "Condemned after the harbor fire, except the lamps inside still burn some nights.",
+    ] },
+    { label: 'Sealed Meeting House', furniture: null, leads: [
+      "The congregation that built it hasn't held a service in forty years — and still meets.",
+    ] },
+  ];
+
+  const rooms = [];
+  const usedLabels = new Set();
+  const buildingTarget = 7 + Math.floor((cols * rows) / 260);
+  let placed = 0, guardOuter = 0;
+  while (placed < buildingTarget && guardOuter++ < buildingTarget * 30) {
+    const bw = 3 + Math.floor(rng() * 3), bh = 3 + Math.floor(rng() * 3);
+    const bx = 2 + Math.floor(rng() * Math.max(1, cols - bw - 4));
+    const by = 2 + Math.floor(rng() * Math.max(1, rows - bh - 4));
+    let clear = true;
+    for (let yy = by - 1; yy <= by + bh && clear; yy++) for (let xx = bx - 1; xx <= bx + bw; xx++) {
+      if (!inBounds(cols, rows, xx, yy) || grid[idx(cols, xx, yy)] !== FLOOR) { clear = false; break; }
+    }
+    if (!clear) continue;
+
+    for (let yy = by; yy < by + bh; yy++) for (let xx = bx; xx < bx + bw; xx++) grid[idx(cols, xx, yy)] = WALL;
+    for (let yy = by + 1; yy < by + bh - 1; yy++) for (let xx = bx + 1; xx < bx + bw - 1; xx++) grid[idx(cols, xx, yy)] = FLOOR;
+    const doorSide = Math.floor(rng() * 4);
+    let dx2, dy2;
+    if (doorSide === 0) { dx2 = bx + Math.floor(bw / 2); dy2 = by; }
+    else if (doorSide === 1) { dx2 = bx + Math.floor(bw / 2); dy2 = by + bh - 1; }
+    else if (doorSide === 2) { dx2 = bx; dy2 = by + Math.floor(bh / 2); }
+    else { dx2 = bx + bw - 1; dy2 = by + Math.floor(bh / 2); }
+    grid[idx(cols, dx2, dy2)] = DOOR;
+
+    const secret = placed > 2 && rng() < 0.14;
+    const pool = secret ? SECRET_LOCATIONS : LOCATIONS;
+    let entry, label;
+    let guard = 0;
+    do {
+      entry = pool[Math.floor(rng() * pool.length)];
+      label = entry.familyName ? `${SURNAME_POOL[Math.floor(rng() * SURNAME_POOL.length)]} Residence` : entry.label;
+      guard++;
+    } while (usedLabels.has(label) && guard < 30 && !secret);
+    usedLabels.add(label);
+
+    const lead = entry.leads[Math.floor(rng() * entry.leads.length)];
+    const room = {
+      x: bx, y: by, w: bw, h: bh,
+      cx: bx + Math.floor(bw / 2), cy: by + Math.floor(bh / 2),
+      label, secret, lead,
+    };
+    rooms.push(room);
+    placed++;
+    if (entry.furniture && rng() < 0.85) features.push({ type: entry.furniture, x: room.cx, y: room.cy, room });
+  }
+
+  for (let tries = 0; tries < 60; tries++) {
+    const wx = 2 + Math.floor(rng() * (cols - 4));
+    const wy = 2 + Math.floor(rng() * (rows - 4));
+    if (grid[idx(cols, wx, wy)] !== FLOOR) continue;
+    let clash = false;
+    for (const f of features) if (Math.abs(f.x - wx) <= 1 && Math.abs(f.y - wy) <= 1) { clash = true; break; }
+    if (!clash) { features.push({ type: 'well', x: wx, y: wy }); break; }
+  }
+
+  const key = [
+    { color: '#8a7a5c', label: 'Open ground' },
+    { color: '#6b5a44', label: 'Road / lane' },
+    { color: '#3a2f22', label: 'Building wall' },
+    { color: '#5a3624', label: 'Door' },
+    { label: 'Well' },
+    { label: 'Furnishings (desk, crate, table, ...)' },
+  ];
+  const flavorPool = [
+    "The harbor bell rings at dusk whether or not there's a ship to greet.",
+    "No one in town will say how long the Corwin place has stood empty, only that it's better left that way.",
+    "Half the storefronts change hands every few years. The other half have never changed hands at all.",
+    "The town council keeps minutes for meetings no one remembers attending.",
+    "Every family here has a story about a relative who 'went to sea and never wrote.'",
+  ];
+  return {
+    cols, rows, grid, features, rooms, mapType: 'village',
+    title: 'Ashford Cove',
+    flavor: flavorPool[Math.floor(rng() * flavorPool.length)],
+    key,
+  };
+}
+
+/* ---------------------------------------------------------------------
  * Rendering
  * ------------------------------------------------------------------- */
 const PALETTES = {
@@ -798,6 +1007,7 @@ const PALETTES = {
   mansion: { floor: '#d8c69a', floorAlt: '#cfbb8c', wall: '#241f18', door: '#5a3624', ink: '#1c150e' },
   crypt: { floor: '#b7a077', floorAlt: '#ab9469', wallNear: '#3a3226', wallFar: '#120e0a', door: '#5a3624', ink: '#160f09' },
   graveyard: { ground: '#71805c', groundAlt: '#687654', path: '#8d8262', pathAlt: '#847958', wall: '#2c2a22', door: '#5a3624', ink: '#1c1a12' },
+  village: { ground: '#8a7a5c', groundAlt: '#7f7154', path: '#6b5a44', pathAlt: '#645440', wall: '#3a2f22', door: '#5a3624', ink: '#241d15' },
 };
 
 function hash2(x, y) {
@@ -1003,6 +1213,19 @@ function drawFeature(ctx, f, cs) {
       }
       break;
     }
+    case 'well': {
+      ctx.fillStyle = '#8f8a78';
+      ctx.strokeStyle = '#3a362c';
+      ctx.beginPath();
+      ctx.arc(0, 0, cs * 0.26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-cs * 0.2, -cs * 0.05); ctx.lineTo(cs * 0.2, -cs * 0.05);
+      ctx.moveTo(-cs * 0.14, cs * 0.14); ctx.lineTo(cs * 0.14, cs * 0.14);
+      ctx.stroke();
+      break;
+    }
   }
   ctx.restore();
 }
@@ -1101,9 +1324,9 @@ function renderMap(canvas, map, cellSize) {
       } else if (t === PATH) {
         color = hash2(x, y) < 50 ? palette.path : palette.pathAlt;
       } else if (t === DOOR) {
-        color = mapType === 'graveyard' ? palette.ground : palette.floor;
+        color = (mapType === 'graveyard' || mapType === 'village') ? palette.ground : palette.floor;
       } else {
-        color = mapType === 'graveyard'
+        color = (mapType === 'graveyard' || mapType === 'village')
           ? (hash2(x, y) < 50 ? palette.ground : palette.groundAlt)
           : (hash2(x, y) < 50 ? palette.floor : palette.floorAlt);
       }
@@ -1180,6 +1403,13 @@ const MONSTER_POOLS = {
     { name: 'The groundskeeper, no longer entirely himself', tier: 'Low', desc: 'Still does the rounds every night. Still rings the gate bell. Hasn’t drawn breath in some time.' },
     { name: 'Whatever the cultists came here to wake up', tier: 'Extreme', desc: "The disturbed earth wasn't an accident, and it wasn't grave robbers." },
   ],
+  village: [
+    { name: 'A hybrid townsperson, watching', tier: 'Low', desc: "Looks ordinary enough until you notice how long it's been standing at the window without blinking." },
+    { name: 'A cult cell, meeting after dark', tier: 'Moderate', desc: "Half the town's 'prayer meeting' regulars. They already know the investigators are asking questions." },
+    { name: 'A Deep One, come up the river', tier: 'Severe', desc: "Doesn't belong on land, and isn't happy about being seen on it." },
+    { name: 'The thing wearing the sheriff', tier: 'Severe', desc: "Still does the job. Still walks the same beat. Isn't entirely the man who held it last year." },
+    { name: 'Whatever the town has been feeding', tier: 'Extreme', desc: "There's a reason the harbor catch has been thin, and it isn't overfishing." },
+  ],
 };
 
 /* ---------------------------------------------------------------------
@@ -1190,7 +1420,8 @@ const SIZES = {
   medium: { cols: 48, rows: 34 },
   large: { cols: 60, rows: 42 },
 };
-const GENERATORS = { cave: generateCave, mansion: generateMansion, crypt: generateCrypt, graveyard: generateGraveyard };
+const GENERATORS = { cave: generateCave, mansion: generateMansion, crypt: generateCrypt, graveyard: generateGraveyard, village: generateVillage };
+const ROOM_HEADINGS = { mansion: 'Rooms & Chambers', crypt: 'Rooms & Chambers', graveyard: 'Rooms & Chambers', village: 'Village Locations' };
 const CELL_SIZE = 18;
 
 const state = { type: 'cave' };
@@ -1334,11 +1565,24 @@ function updateSidebar(map, seedStr) {
   }
   roomListEl.innerHTML = '';
   if (map.rooms && map.rooms.length) {
+    roomsHeadingEl.textContent = ROOM_HEADINGS[map.mapType] || 'Rooms & Chambers';
     roomsHeadingEl.style.display = '';
     for (const room of map.rooms) {
       const li = document.createElement('li');
       if (room.secret) li.classList.add('secret');
-      li.textContent = room.label;
+      const entry = document.createElement('div');
+      entry.className = 'room-entry';
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'room-label';
+      labelSpan.textContent = room.label;
+      entry.appendChild(labelSpan);
+      if (room.lead) {
+        const leadSpan = document.createElement('span');
+        leadSpan.className = 'room-lead';
+        leadSpan.textContent = room.lead;
+        entry.appendChild(leadSpan);
+      }
+      li.appendChild(entry);
       roomListEl.appendChild(li);
     }
   } else {
