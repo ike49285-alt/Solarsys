@@ -93,6 +93,18 @@ Everything lives in `index.html`'s one `<script>` block:
   draws each placement as a numbered overlay *after* `renderMap` returns
   (see `redraw()`), gated by `#showThreatsToggle`, so markers are never
   part of the generator's own grid/features output.
+- **Saved threats**: `savedThreats` (an object keyed by Keeper-chosen
+  name) is persisted to `localStorage` under `SAVED_THREATS_KEY` via
+  `loadSavedThreats()`/`persistSavedThreats()` — this is the one place
+  in the app that survives a page reload, since it's the Keeper's own
+  reusable library (a "Deep One Hybrid" stat block they don't want to
+  retype per map), not something tied to one generated layout. The 💾
+  button on a `.threat-card` (`saveThreatAsTemplate`) writes the
+  current card's stats/fields in; `#savedThreatSelect` (repopulated by
+  `populateSavedThreatSelect`) picks what a *newly placed* marker starts
+  from (`threatFromTemplate`, called from the canvas click handler) —
+  it's a starting point, not a live link, so editing a placed marker
+  never mutates the saved template or other markers placed from it.
 - **Map viewer (zoom/pan)**: `view = { scale, x, y }` drives a CSS
   `translate()+scale()` transform on the canvas element — the canvas
   bitmap itself is never redrawn for this. `fitView()` sizes/centers it

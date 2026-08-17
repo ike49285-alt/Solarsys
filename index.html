@@ -229,7 +229,7 @@
     min-width: 0;
     font-weight: bold;
   }
-  .threat-remove-btn {
+  .threat-icon-btn {
     flex: none;
     background: transparent;
     border: 1px solid var(--panel-border);
@@ -239,7 +239,7 @@
     padding: 0.1rem 0.45rem;
     cursor: pointer;
   }
-  .threat-remove-btn:hover { border-color: var(--accent-bright); color: var(--accent-bright); }
+  .threat-icon-btn:hover { border-color: var(--accent-bright); color: var(--accent-bright); }
   .stat-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -315,6 +315,8 @@
         <button id="randomizeBtn" title="Random seed">🎲</button>
       </div>
       <button id="addThreatBtn" class="toggle-btn" title="Arm placement, then click the map">+ Threat</button>
+      <select id="savedThreatSelect" title="Starting stats for the next placed threat"><option value="">Blank threat</option></select>
+      <button id="deleteSavedBtn" title="Delete the selected saved threat">🗑</button>
       <label class="toggle-group"><input type="checkbox" id="showThreatsToggle" checked> Show markers</label>
       <button id="clearThreatsBtn" title="Remove all placed threats">Clear threats</button>
       <button class="primary" id="generateBtn">Generate</button>
@@ -1428,6 +1430,41 @@ function blankThreat(x, y) {
   return { x, y, name: '', stats, move: '', armor: '', attacks: '', skills: '', sanLoss: '', notes: '' };
 }
 
+/* ---------------------------------------------------------------------
+ * Saved threats — a small local library of stat blocks the Keeper has
+ * already filled in once (e.g. "Deep One Hybrid," "Cultist"), stored in
+ * localStorage so the same creature can be dropped onto any map without
+ * retyping its stats. Purely a convenience cache of the Keeper's own
+ * entries — nothing here is pre-populated or generated.
+ * ------------------------------------------------------------------- */
+const SAVED_THREATS_KEY = 'eldritchCartographer.savedThreats';
+
+function loadSavedThreats() {
+  try {
+    const raw = localStorage.getItem(SAVED_THREATS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+function persistSavedThreats() {
+  try { localStorage.setItem(SAVED_THREATS_KEY, JSON.stringify(savedThreats)); } catch (e) { /* storage unavailable — keep going in-memory */ }
+}
+
+function threatFromTemplate(x, y, template) {
+  const base = blankThreat(x, y);
+  if (!template) return base;
+  base.name = template.name || '';
+  base.stats = { ...base.stats, ...template.stats };
+  base.move = template.move || '';
+  base.armor = template.armor || '';
+  base.attacks = template.attacks || '';
+  base.skills = template.skills || '';
+  base.sanLoss = template.sanLoss || '';
+  base.notes = template.notes || '';
+  return base;
+}
+
 // STR+SIZ -> [Damage Bonus display, Build] per the CoC 7e core rulebook table.
 function dbBuildFromStrSiz(sum) {
   if (sum <= 64) return ['-2', -2];
@@ -1467,6 +1504,7 @@ const CELL_SIZE = 18;
 const state = { type: 'cave' };
 let currentMap = null;
 let placedThreats = [];
+let savedThreats = loadSavedThreats();
 
 const canvas = document.getElementById('mapCanvas');
 const canvasWrap = document.querySelector('.canvas-wrap');
@@ -1481,6 +1519,8 @@ const roomListEl = document.getElementById('roomList');
 const roomsHeadingEl = document.getElementById('roomsHeading');
 const threatListEl = document.getElementById('threatList');
 const addThreatBtn = document.getElementById('addThreatBtn');
+const savedThreatSelect = document.getElementById('savedThreatSelect');
+const deleteSavedBtn = document.getElementById('deleteSavedBtn');
 const showThreatsToggle = document.getElementById('showThreatsToggle');
 const clearThreatsBtn = document.getElementById('clearThreatsBtn');
 const footerEl = document.getElementById('footerText');
@@ -1623,6 +1663,40 @@ function cellFromEvent(e) {
   return { gx, gy };
 }
 
+function populateSavedThreatSelect() {
+  const previous = savedThreatSelect.value;
+  savedThreatSelect.innerHTML = '';
+  const blank = document.createElement('option');
+  blank.value = '';
+  blank.textContent = 'Blank threat';
+  savedThreatSelect.appendChild(blank);
+  Object.keys(savedThreats).sort((a, b) => a.localeCompare(b)).forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    savedThreatSelect.appendChild(opt);
+  });
+  savedThreatSelect.value = savedThreats[previous] ? previous : '';
+}
+
+function saveThreatAsTemplate(threat) {
+  const suggested = threat.name.trim() || 'Unnamed threat';
+  const input = window.prompt('Save this stat block for reuse as:', suggested);
+  if (input === null) return;
+  const name = input.trim();
+  if (!name) return;
+  if (savedThreats[name] && !window.confirm(`A saved threat named "${name}" already exists. Overwrite it?`)) return;
+  savedThreats[name] = {
+    name,
+    stats: { ...threat.stats },
+    move: threat.move, armor: threat.armor, attacks: threat.attacks,
+    skills: threat.skills, sanLoss: threat.sanLoss, notes: threat.notes,
+  };
+  persistSavedThreats();
+  populateSavedThreatSelect();
+  savedThreatSelect.value = name;
+}
+
 const STAT_LABELS = { str: 'STR', con: 'CON', siz: 'SIZ', dex: 'DEX', app: 'APP', int: 'INT', pow: 'POW', edu: 'EDU' };
 
 function buildThreatCard(threat, index) {
@@ -1643,9 +1717,16 @@ function buildThreatCard(threat, index) {
   nameInput.value = threat.name;
   nameInput.addEventListener('input', () => { threat.name = nameInput.value; });
   head.appendChild(nameInput);
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'threat-icon-btn';
+  saveBtn.textContent = '💾';
+  saveBtn.title = 'Save this stat block for reuse';
+  saveBtn.addEventListener('click', () => saveThreatAsTemplate(threat));
+  head.appendChild(saveBtn);
   const removeBtn = document.createElement('button');
   removeBtn.type = 'button';
-  removeBtn.className = 'threat-remove-btn';
+  removeBtn.className = 'threat-icon-btn';
   removeBtn.textContent = '✕';
   removeBtn.title = 'Remove this marker';
   removeBtn.addEventListener('click', () => { placedThreats.splice(index, 1); redraw(); });
@@ -1823,6 +1904,14 @@ document.getElementById('randomizeBtn').addEventListener('click', () => {
 titleInput.addEventListener('input', () => { if (currentMap) currentMap.title = titleInput.value; });
 mapNotesEl.addEventListener('input', () => { if (currentMap) currentMap.notes = mapNotesEl.value; });
 addThreatBtn.addEventListener('click', () => setPlacingThreat(!placingThreat));
+deleteSavedBtn.addEventListener('click', () => {
+  const name = savedThreatSelect.value;
+  if (!name) return;
+  if (!window.confirm(`Delete saved threat "${name}"? This can't be undone.`)) return;
+  delete savedThreats[name];
+  persistSavedThreats();
+  populateSavedThreatSelect();
+});
 showThreatsToggle.addEventListener('change', redraw);
 clearThreatsBtn.addEventListener('click', () => { placedThreats = []; redraw(); });
 canvas.addEventListener('click', (e) => {
@@ -1833,7 +1922,7 @@ canvas.addEventListener('click', (e) => {
   const existingIdx = placedThreats.findIndex(p => p.x === gx && p.y === gy);
   if (existingIdx >= 0) { placedThreats.splice(existingIdx, 1); redraw(); return; }
   if (!placingThreat) return;
-  placedThreats.push(blankThreat(gx, gy));
+  placedThreats.push(threatFromTemplate(gx, gy, savedThreats[savedThreatSelect.value]));
   redraw();
   const nameInputs = threatListEl.querySelectorAll('.threat-name');
   const last = nameInputs[nameInputs.length - 1];
@@ -1852,6 +1941,7 @@ document.getElementById('resetViewBtn').addEventListener('click', fitView);
 (function init() {
   const initRng = mulberry32((Date.now() ^ 0x9e3779b9) >>> 0);
   seedInput.value = randomSeedWord(initRng);
+  populateSavedThreatSelect();
   setActiveType('cave');
   regenerate();
 })();

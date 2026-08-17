@@ -63,6 +63,15 @@ you've entered, so you can flip it off before sharing a clean copy of
 the map with players. Switching map type or generating a new layout
 clears placed markers, since their grid positions no longer apply.
 
+**Reusing a stat block**: hit 💾 on a filled-in threat card to save it
+by name (e.g. "Deep One Hybrid") — it's kept in the browser's local
+storage, so it's there next time you open the page, on any map. The
+dropdown next to **+ Threat** picks what a *new* marker starts from:
+leave it on "Blank threat," or pick a saved one to pre-fill everything
+(name, stats, attacks, all of it) the moment you place it, still fully
+editable per-marker afterward. 🗑 deletes whichever saved entry is
+currently selected in that dropdown.
+
 ## Using it
 
 1. Open `index.html` in any modern browser (double-click it, or visit it
