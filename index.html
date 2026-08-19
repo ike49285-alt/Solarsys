@@ -165,7 +165,33 @@
     border-top: 1px solid var(--panel-border);
     padding-top: 0.7rem;
   }
-  aside h3:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+  aside > h3:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+  .saved-location-row { display: flex; gap: 0.35rem; align-items: center; margin-bottom: 0.5rem; }
+  .saved-location-row select { flex: 1; min-width: 0; }
+  #saveLocationBtn { width: 100%; margin-bottom: 0.4rem; }
+  .notes-heading-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: space-between;
+    margin: 1rem 0 0.4rem;
+    border-top: 1px solid var(--panel-border);
+    padding-top: 0.7rem;
+  }
+  .notes-heading-row h3 { margin: 0; border-top: none; padding-top: 0; flex: 1; }
+  .notes-heading-btn {
+    flex: none;
+    background: transparent;
+    border: 1px solid var(--panel-border);
+    color: var(--text-dim);
+    border-radius: 3px;
+    font-size: 0.72rem;
+    padding: 0.2rem 0.5rem;
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  .notes-heading-btn:hover { border-color: var(--accent-bright); color: var(--accent-bright); }
   ul.key-list, ul.room-list { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
   ul.key-list li, ul.room-list li {
     display: flex;
@@ -329,9 +355,20 @@
       <canvas id="mapCanvas"></canvas>
     </div>
     <aside>
+      <h3>Saved Locations</h3>
+      <div class="saved-location-row">
+        <select id="savedLocationSelect"><option value="">— no saved locations —</option></select>
+        <button id="loadLocationBtn">Load</button>
+        <button id="deleteLocationBtn" title="Delete the selected saved location">🗑</button>
+      </div>
+      <button id="saveLocationBtn">💾 Save this location</button>
       <input type="text" id="mapTitleInput" class="title-input" aria-label="Map title">
       <p class="flavor" id="mapFlavor">—</p>
-      <h3>Keeper Notes</h3>
+      <div class="notes-heading-row">
+        <h3>Keeper Notes</h3>
+        <button id="importPdfBtn" class="notes-heading-btn" title="Extract text from a PDF into these notes (rough — expect to clean it up)">📄 Import PDF</button>
+        <input type="file" id="importPdfInput" accept="application/pdf" style="display:none;">
+      </div>
       <textarea id="mapNotes" class="notes-area" placeholder="Notes for this location — whatever the Keeper needs to remember."></textarea>
       <h3>Key</h3>
       <ul class="key-list" id="keyList"></ul>
@@ -1490,6 +1527,45 @@ function computeDerived(stats) {
 }
 
 /* ---------------------------------------------------------------------
+ * Saved locations — a whole prepped map (title, Keeper Notes, every
+ * room's notes, every placed threat's stat block), saved by name to
+ * localStorage. Unlike everything else on this page, a saved location
+ * survives switching map type, hitting Generate, or reloading the page —
+ * it's the thing that makes "prep once, glance at it during the session"
+ * actually true across more than one location at a time. Stores a full
+ * snapshot rather than a seed to replay later: this generator's
+ * algorithms will keep changing, and replaying an old seed after a
+ * future code change could silently regenerate different geometry,
+ * desyncing room notes (matched by index) and threat marker positions.
+ * A snapshot always reloads pixel-identical to what was saved.
+ * ------------------------------------------------------------------- */
+const SAVED_LOCATIONS_KEY = 'eldritchCartographer.savedLocations';
+
+function loadSavedLocations() {
+  try {
+    const raw = localStorage.getItem(SAVED_LOCATIONS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+function persistSavedLocations() {
+  try { localStorage.setItem(SAVED_LOCATIONS_KEY, JSON.stringify(savedLocations)); } catch (e) { /* storage unavailable — keep going in-memory */ }
+}
+
+function hasUnsavedContent() {
+  if (!currentMap) return false;
+  if (currentMap.notes && currentMap.notes.trim()) return true;
+  if (currentMap.rooms.some(r => r.notes && r.notes.trim())) return true;
+  if (placedThreats.length) return true;
+  return false;
+}
+function confirmDiscardIfNeeded() {
+  if (!hasUnsavedContent()) return true;
+  return window.confirm("This map has notes or threats that aren't saved as a Location — Generate will discard them. Continue?");
+}
+
+/* ---------------------------------------------------------------------
  * App wiring
  * ------------------------------------------------------------------- */
 const SIZES = {
@@ -1505,15 +1581,22 @@ const state = { type: 'cave' };
 let currentMap = null;
 let placedThreats = [];
 let savedThreats = loadSavedThreats();
+let savedLocations = loadSavedLocations();
 
 const canvas = document.getElementById('mapCanvas');
 const canvasWrap = document.querySelector('.canvas-wrap');
 const seedInput = document.getElementById('seedInput');
 const sizeSelect = document.getElementById('sizeSelect');
 const typeGroup = document.getElementById('typeGroup');
+const savedLocationSelect = document.getElementById('savedLocationSelect');
+const loadLocationBtn = document.getElementById('loadLocationBtn');
+const deleteLocationBtn = document.getElementById('deleteLocationBtn');
+const saveLocationBtn = document.getElementById('saveLocationBtn');
 const titleInput = document.getElementById('mapTitleInput');
 const flavorEl = document.getElementById('mapFlavor');
 const mapNotesEl = document.getElementById('mapNotes');
+const importPdfBtn = document.getElementById('importPdfBtn');
+const importPdfInput = document.getElementById('importPdfInput');
 const keyListEl = document.getElementById('keyList');
 const roomListEl = document.getElementById('roomList');
 const roomsHeadingEl = document.getElementById('roomsHeading');
@@ -1814,6 +1897,84 @@ function redraw() {
   updateThreatList();
 }
 
+function populateSavedLocationSelect() {
+  const previous = savedLocationSelect.value;
+  savedLocationSelect.innerHTML = '';
+  const names = Object.keys(savedLocations).sort((a, b) => (savedLocations[b].savedAt || 0) - (savedLocations[a].savedAt || 0));
+  if (!names.length) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = '— no saved locations —';
+    savedLocationSelect.appendChild(opt);
+  } else {
+    for (const name of names) {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      savedLocationSelect.appendChild(opt);
+    }
+  }
+  savedLocationSelect.value = savedLocations[previous] ? previous : (names[0] || '');
+}
+
+function saveCurrentLocation() {
+  if (!currentMap) return;
+  const suggested = currentMap.title.trim() || 'Unnamed location';
+  const input = window.prompt('Save this location as:', suggested);
+  if (input === null) return;
+  const name = input.trim();
+  if (!name) return;
+  if (savedLocations[name] && !window.confirm(`A saved location named "${name}" already exists. Overwrite it?`)) return;
+  savedLocations[name] = {
+    savedAt: Date.now(),
+    seed: seedInput.value,
+    size: sizeSelect.value,
+    map: {
+      cols: currentMap.cols,
+      rows: currentMap.rows,
+      grid: Array.from(currentMap.grid),
+      features: currentMap.features,
+      rooms: currentMap.rooms,
+      mapType: currentMap.mapType,
+      title: currentMap.title,
+      flavor: currentMap.flavor,
+      key: currentMap.key,
+      notes: currentMap.notes,
+    },
+    placedThreats: placedThreats.map(t => ({ ...t, stats: { ...t.stats } })),
+  };
+  persistSavedLocations();
+  populateSavedLocationSelect();
+  savedLocationSelect.value = name;
+}
+
+function loadLocation(name) {
+  const entry = savedLocations[name];
+  if (!entry) return;
+  if (!confirmDiscardIfNeeded()) return;
+  const m = entry.map;
+  currentMap = {
+    cols: m.cols,
+    rows: m.rows,
+    grid: Uint8Array.from(m.grid),
+    features: m.features,
+    rooms: m.rooms,
+    mapType: m.mapType,
+    title: m.title,
+    flavor: m.flavor,
+    key: m.key,
+    notes: m.notes,
+  };
+  placedThreats = entry.placedThreats.map(t => ({ ...t, stats: { ...t.stats } }));
+  seedInput.value = entry.seed || '';
+  sizeSelect.value = entry.size || sizeSelect.value;
+  setActiveType(m.mapType);
+  setPlacingThreat(false);
+  updateSidebar(currentMap, seedInput.value.trim() || 'eldritch');
+  redraw();
+  fitView();
+}
+
 function setActiveType(type) {
   state.type = type;
   for (const btn of typeGroup.querySelectorAll('.type-btn')) {
@@ -1822,6 +1983,7 @@ function setActiveType(type) {
 }
 
 function regenerate() {
+  if (!confirmDiscardIfNeeded()) return;
   const seedStr = seedInput.value.trim() || 'eldritch';
   const rng = makeRng(seedStr + '::' + state.type);
   const { cols, rows } = SIZES[sizeSelect.value];
@@ -1903,6 +2065,20 @@ document.getElementById('randomizeBtn').addEventListener('click', () => {
 });
 titleInput.addEventListener('input', () => { if (currentMap) currentMap.title = titleInput.value; });
 mapNotesEl.addEventListener('input', () => { if (currentMap) currentMap.notes = mapNotesEl.value; });
+saveLocationBtn.addEventListener('click', saveCurrentLocation);
+loadLocationBtn.addEventListener('click', () => {
+  const name = savedLocationSelect.value;
+  if (!name) return;
+  loadLocation(name);
+});
+deleteLocationBtn.addEventListener('click', () => {
+  const name = savedLocationSelect.value;
+  if (!name) return;
+  if (!window.confirm(`Delete saved location "${name}"? This can't be undone.`)) return;
+  delete savedLocations[name];
+  persistSavedLocations();
+  populateSavedLocationSelect();
+});
 addThreatBtn.addEventListener('click', () => setPlacingThreat(!placingThreat));
 deleteSavedBtn.addEventListener('click', () => {
   const name = savedThreatSelect.value;
@@ -1942,6 +2118,7 @@ document.getElementById('resetViewBtn').addEventListener('click', fitView);
   const initRng = mulberry32((Date.now() ^ 0x9e3779b9) >>> 0);
   seedInput.value = randomSeedWord(initRng);
   populateSavedThreatSelect();
+  populateSavedLocationSelect();
   setActiveType('cave');
   regenerate();
 })();
