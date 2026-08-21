@@ -43,9 +43,22 @@ own town/house/vault), and there's a blank "Keeper Notes" box for the
 map as a whole. Every room, chamber, or building in the sidebar has its
 own blank notes textarea too — that's where the actual scenario lives:
 what's really in the General Store, why the Ossuary matters, what the
-party will find. It's all typed by you, saved only in the browser tab
-for that generated map, and cleared (deliberately — it's tied to that
-specific layout) whenever you generate a new one.
+party will find. It's all typed by you. By default it's tied to the map
+currently on screen and clears whenever you generate a new one — see
+**Saved Locations** below for keeping it around.
+
+**Saved Locations**: click **💾 Save this location** to keep the whole
+prepped map — title, Keeper Notes, every room's notes, every placed
+threat's full stat block — under a name in the browser's local storage.
+The dropdown at the top of the sidebar lists everything you've saved
+(most recent first); **Load** brings one back exactly as you left it,
+on any map type, any time, even after closing the tab. If the current
+map has any notes or threats that aren't saved yet, hitting Generate
+(or switching type/size) asks before discarding them — save first if
+you want to keep it. 🗑 deletes whichever saved location is selected.
+This is what makes "prep a few locations ahead of a session" actually
+work: prep the Cave, save it, prep the Village, save it, and pull
+either back up mid-session without losing anything.
 
 **Placing threats**: click **+ Threat** to arm placement, then click the
 map to drop a numbered marker; click a marker again (or its ✕ in the

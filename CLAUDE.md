@@ -70,7 +70,8 @@ Everything lives in `index.html`'s one `<script>` block:
   notes`) and an editable title (`#mapTitleInput`, `currentMap.title`,
   defaults to the generator's title but is renameable). All of it is
   reset to blank/default in `regenerate()` — notes belong to one
-  generated layout, not across regenerations.
+  generated layout, not across regenerations, *unless* the Keeper saves
+  that layout first (see Saved locations below).
 - **Shared surname pool**: `SURNAME_POOL` (top-level, near `carveLine`)
   is used by both `generateGraveyard` (mausolea) and `generateVillage`
   (family residences, and the "no one will say why the ___ place has
@@ -95,16 +96,32 @@ Everything lives in `index.html`'s one `<script>` block:
   part of the generator's own grid/features output.
 - **Saved threats**: `savedThreats` (an object keyed by Keeper-chosen
   name) is persisted to `localStorage` under `SAVED_THREATS_KEY` via
-  `loadSavedThreats()`/`persistSavedThreats()` — this is the one place
-  in the app that survives a page reload, since it's the Keeper's own
-  reusable library (a "Deep One Hybrid" stat block they don't want to
-  retype per map), not something tied to one generated layout. The 💾
+  `loadSavedThreats()`/`persistSavedThreats()` — a reusable library (a
+  "Deep One Hybrid" stat block the Keeper doesn't want to retype per
+  map), not something tied to one generated layout. The 💾
   button on a `.threat-card` (`saveThreatAsTemplate`) writes the
   current card's stats/fields in; `#savedThreatSelect` (repopulated by
   `populateSavedThreatSelect`) picks what a *newly placed* marker starts
   from (`threatFromTemplate`, called from the canvas click handler) —
   it's a starting point, not a live link, so editing a placed marker
   never mutates the saved template or other markers placed from it.
+- **Saved locations**: `savedLocations` (keyed by Keeper-chosen name),
+  `SAVED_LOCATIONS_KEY`, `loadSavedLocations()`/`persistSavedLocations()`
+  — same pattern as saved threats, but stores a **full snapshot** of a
+  whole prepped map (`saveCurrentLocation()`: grid as a plain array —
+  `Array.from(currentMap.grid)`, since `Uint8Array` isn't directly
+  JSON-safe — plus features/rooms-with-notes/key/flavor/title/notes and
+  a clone of `placedThreats`), not a seed to regenerate later. Don't
+  "optimize" this into seed+type+size replay: the generators will keep
+  changing, and replaying an old seed after a future generator change
+  could silently produce different geometry, desyncing room notes
+  (matched by array index) and threat marker positions from a save that
+  looked fine when it was made. `loadLocation()` rehydrates `currentMap`
+  directly from the snapshot (`Uint8Array.from(...)` back from the plain
+  array) — it never calls a `generateX()` function. `hasUnsavedContent()`
+  / `confirmDiscardIfNeeded()` gate the top of `regenerate()` so
+  Generate/type-switch/size-change/🎲 ask before silently discarding
+  notes or threats that aren't saved as a Location yet.
 - **Map viewer (zoom/pan)**: `view = { scale, x, y }` drives a CSS
   `translate()+scale()` transform on the canvas element — the canvas
   bitmap itself is never redrawn for this. `fitView()` sizes/centers it
