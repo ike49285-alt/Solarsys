@@ -158,6 +158,10 @@
       if (f.stage === 'cloud' && f.age !== glide.age) { glide.age = f.age; glide.wall = performance.now(); }
       // A disk reads best from a bit more above than the cloud did.
       if (f.stage === 'disk' && (!frame || frame.stage !== 'disk') && !cam.turned) cam.tiltGoal = DISK_TILT;
+      // A new disk after the old one had gone is measured against itself.
+      if (f.stage === 'disk' && frame && frame.stage === 'disk' && frame.readings.gone && !f.readings.gone) {
+        refMass.gas = refMass.dust = 0; peaks.gas = peaks.dust = 0;
+      }
       frame = f;
       if (f.stage === 'disk') {
         const d = f.disk;

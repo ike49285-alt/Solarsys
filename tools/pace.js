@@ -19,16 +19,15 @@ const secs = new Map();
 const add = (stage, s) => secs.set(stage, (secs.get(stage) || 0) + s);
 
 while (w.stage === 'cloud') add(System.phase(w), System.stepCloud(w) / Engine.CLOUD_RATE);
-while (w.age < 2e10 && !w.ended) {
+// On to a black dwarf, a thousand billion years on; time goes on after that.
+while (w.age < 2e12) {
   const phase = System.phase(w), star = w.disk.star.phase;
-  const a0 = w.age;
+  const a0 = w.age, rate = Engine.pace(System, w);
   System.advance(w, Math.max(1, System.nextStep(w)) * 2, 4);
-  const mid = 0.5 * (a0 + w.age);
-  const rate = Math.min(mid * (Engine.LOG_RATE[phase] || 0.01), Engine.STAR_STEPS * System.starStep(w));
   add(phase === 'late' ? `old age: ${star}` : phase, (w.age - a0) / rate);
 }
 
 const fmt = (s) => (s >= 90 ? `${(s / 60).toFixed(1)} min` : `${s.toFixed(0)} s`);
 let total = 0;
 for (const [stage, s] of secs) { total += s; console.log(`${stage.padEnd(30)} ${fmt(s)}`); }
-console.log(`${'whole system'.padEnd(30)} ${fmt(total)}`);
+console.log(`${'to a black dwarf'.padEnd(30)} ${fmt(total)}`);

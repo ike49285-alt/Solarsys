@@ -203,6 +203,7 @@
       { key: 'move', label: 'Move', hint: 'Drag a planet to a new orbit.' },
       { key: 'sweep', label: 'Sweep', hint: 'Drag across the disk to sweep the gas and dust out of that band.' },
       { key: 'dust', label: 'Dust', hint: 'Tap the disk to scatter dust into a ring there.', choices: [['1 M⊕', 1], ['10 M⊕', 10], ['50 M⊕', 50]], def: 1 },
+      { key: 'gas', label: 'Gas', hint: 'Tap to pour a ring of fresh gas and dust into orbit there. It spreads into a disk, even around a dead star.', choices: [['1 M♃', 1], ['10 M♃', 10], ['50 M♃', 50]], def: 1 },
       { key: 'flyby', label: 'Flyby', hint: 'Tap a distance from the star: another star passes that close.', choices: [['Red dwarf', 0.3], ['Sun-like', 1], ['Massive', 3]], def: 1 },
     ],
   };
@@ -247,16 +248,17 @@
     const ch = $('tool-choices');
     ch.textContent = '';
     if (t.choices) {
-      if (choice[t.key] === undefined) choice[t.key] = t.def || 0;
+      const ck = `${stageKey}:${t.key}`;   // the cloud and the disk each have a Gas tool
+      if (choice[ck] === undefined) choice[ck] = t.def || 0;
       t.choices.forEach(([name], k) => {
         const b = document.createElement('button');
-        b.type = 'button'; b.textContent = name; b.setAttribute('aria-pressed', String(k === choice[t.key]));
-        b.addEventListener('click', () => { choice[t.key] = k; ch.querySelectorAll('button').forEach((x, j) => x.setAttribute('aria-pressed', String(j === k))); });
+        b.type = 'button'; b.textContent = name; b.setAttribute('aria-pressed', String(k === choice[ck]));
+        b.addEventListener('click', () => { choice[ck] = k; ch.querySelectorAll('button').forEach((x, j) => x.setAttribute('aria-pressed', String(j === k))); });
         ch.appendChild(b);
       });
     }
   }
-  const chosen = (key) => { const t = TOOLS[stageKey].find((x) => x.key === key); return t && t.choices ? t.choices[choice[key] ?? t.def ?? 0][1] : null; };
+  const chosen = (key) => { const t = TOOLS[stageKey].find((x) => x.key === key); return t && t.choices ? t.choices[choice[`${stageKey}:${key}`] ?? t.def ?? 0][1] : null; };
 
   // ---- Stage timeline ---------------------------------------------------------------------------
   const stages = $('stages');
@@ -485,7 +487,11 @@
     view.pointer(null);
     if (k === 'pull' || k === 'stir') { engine.send({ type: 'hold', on: false }); if (k === 'pull') engine.send({ type: 'tool', tool: 'pull', p: null }); }
     if (cancel) { live = null; return; }
-    if (k === 'gas' && tap) {
+    if (k === 'gas' && tap && stageKey === 'disk') {
+      const p = view.toPlane(x, y);
+      if (!p) flash('Tilt the view to tap the disk.');
+      else { const r = Math.max(0.06, Math.hypot(p[0], p[1])); engine.send({ type: 'tool', tool: 'gas', r, jupiters: chosen('gas') }); view.mark({ kind: 'band', r0: r / 1.12, r1: r * 1.12, dur: 1.2 }); }
+    } else if (k === 'gas' && tap) {
       const v = view.toView(x, y);
       engine.send({ type: 'tool', tool: 'gas', p: v.p, count: chosen('gas'), radius: 40 * view.auPerPixel() });
       view.mark({ kind: 'ring', p: v.p });
@@ -590,14 +596,13 @@
     buildRails(f.stage);
     showPhase(f.phase);
     $('age').textContent = fmtAge(f.age);
-    $('rate').textContent = f.ended ? 'The end of this system’s story.' : f.skipping ? `Skipping ahead, ${fmtRate(f.rate)}` : paused ? `Paused at ${fmtAge(f.age)}` : `${fmtRate(f.rate)}${f.rate > 0 && f.rate < 0.5 * f.target ? ' (this device’s limit)' : ''}`;
+    $('rate').textContent = f.skipping ? `Skipping ahead, ${fmtRate(f.rate)}` : paused ? `Paused at ${fmtAge(f.age)}` : `${fmtRate(f.rate)}${f.rate > 0 && f.rate < 0.5 * f.target ? ' (this device’s limit)' : ''}`;
     const skip = $('skip');
     if (skip.getAttribute('aria-pressed') !== String(!!f.skipping)) {
       skip.setAttribute('aria-pressed', String(!!f.skipping));
       skip.textContent = f.skipping ? 'Stop ■' : 'Skip ▸▸';
       skip.title = f.skipping ? 'Stop skipping' : 'Hurry on to the next stage';
     }
-    skip.disabled = !!f.ended;
     $('sp-gas-label').textContent = f.stage === 'cloud' ? 'Gas left in the cloud' : 'Gas in the disk';
 
     // Stats.

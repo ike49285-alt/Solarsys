@@ -103,6 +103,16 @@ and app.
 - **The star's late phases are brief.** `Star.stepLimit` keeps steps
   short enough not to jump over the red-giant tip, the asymptotic giant
   branch and the planetary nebula. Keep it in `Disk.maxDt`.
+- **Worlds don't end.** The user didn't want the star's death to force a
+  new world. Time goes on through the remnant era: `LOG_RATE.remnant`
+  runs it quicker, and `LATE_CAP` stops it speeding up past a black
+  dwarf's age. Gas poured in later (`Disk.addGas`) revives the disk with
+  its own clock (`rebornAt`, `System.newDiskAge`), paced like a young
+  one. `MAX_AGE` only keeps the numbers finite.
+- **The star's mass.** `d.mStar` is the mass the star was built from,
+  which is its stellar track. `Disk.starMass(d)` is what it weighs now,
+  after shedding mass late in life. Orbits, gaps and readings use the
+  latter.
 - **The clock.** The page's age runs from the start of the collapse. The
   disk keeps the star's own age in `d.age`, which the physics needs, and
   the star's birth time in `d.bornAt`; `clock()` in system.js adds

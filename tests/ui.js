@@ -31,7 +31,7 @@ fs.mkdirSync(shots, { recursive: true });
   p.on('pageerror', (e) => errors.push(`page error: ${e.message}`));
   p.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
   await p.goto('file://' + page);
-  const state = () => p.evaluate(() => { const f = window.__nebula.latest; return f && { stage: f.stage, phase: f.phase, age: f.age, bodies: (f.bodies || []).length, rate: f.rate, skipping: !!f.skipping }; });
+  const state = () => p.evaluate(() => { const f = window.__nebula.latest; return f && { stage: f.stage, phase: f.phase, age: f.age, bodies: (f.bodies || []).length, rate: f.rate, skipping: !!f.skipping, star: f.star && f.star.phase }; });
   // Skip, then wait for the skip to finish (tapping again would stop it).
   // The page has to keep drawing new frames all the way through.
   const skip = async (limitMs) => {
@@ -95,6 +95,7 @@ fs.mkdirSync(shots, { recursive: true });
   await useTool('sweep'); await drag(0.55, 0.5, 0.7, 0.5);
   await p.waitForTimeout(1000);
   await useTool('flyby'); await tap(0.9, 0.15);
+  await useTool('gas'); await tap(0.45, 0.6);
   await p.waitForTimeout(2500);
   for (const v of ['heat', 'dust', 'orbits']) { await p.click(`#views button[data-view="${v}"]`); await p.waitForTimeout(400); await shot(`6-disk-${v}`); }
   await p.click('#views button[data-view="light"]');
@@ -111,6 +112,16 @@ fs.mkdirSync(shots, { recursive: true });
   await p.click('#views button[data-view="orbits"]');
   await p.waitForTimeout(800);
   await shot('8-orbits');
+
+  // Old age and after: the star dies, and the world goes on.
+  await p.click('#views button[data-view="light"]');
+  for (let k = 0; k < 14; k++) { const s = await state(); if (/dwarf|neutron|hole/.test(s.star)) break; await skip(60000); }
+  console.log('star gone:', JSON.stringify(await state()));
+  { const a0 = (await state()).age; await p.waitForTimeout(2000); const a1 = (await state()).age; if (!(a1 > a0)) errors.push(`time stopped after the star died (${a0} -> ${a1})`); }
+  await useTool('gas'); await tap(0.4, 0.55);
+  await p.waitForTimeout(1500);
+  if (!(await p.evaluate(() => !window.__nebula.latest.readings.gone))) errors.push('pouring gas around the dead star did not start a new disk');
+  await shot('12-afterlife');
 
   // Tabs.
   await p.click('#tab-profile'); await p.waitForTimeout(1200); await shot('9-profile');

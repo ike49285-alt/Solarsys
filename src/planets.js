@@ -100,7 +100,7 @@
   // ---- Starting the bodies ---------------------------------------------------------
   // Companion stars from the collapse become bodies too, if they're bound.
   function addCompanions(d, stars) {
-    const M = d.mStar;
+    const M = Disk.starMass(d);
     for (const s of stars) {
       if (s.primary) continue;
       const r = Math.hypot(...s.pos);
@@ -128,7 +128,7 @@
 
   // ---- One step of growth, migration and dynamics ------------------------------------
   function evolve(d, dt) {
-    const M = d.mStar;
+    const M = Disk.starMass(d);
     const gasOn = !d.gone;
     seed(d);
     const R = rng(d);
@@ -275,7 +275,7 @@
   // Gaps planets cut in the gas (Kanagawa et al. 2017 shape) and, for those
   // at the pebble isolation mass, the pressure bump that stops pebbles.
   function marksAndGaps(d) {
-    const M = d.mStar;
+    const M = Disk.starMass(d);
     for (const b of d.bodies) {
       if (b.kind === 'star') continue;
       const i = cell(b.a);
@@ -335,7 +335,7 @@
 
   // New embryos where planetesimals have gathered and no embryo is near.
   function seed(d) {
-    const M = d.mStar;
+    const M = Disk.starMass(d);
     const sorted = d.bodies.slice().sort((x, y) => x.a - y.a);
     for (let i = 0; i < NR; i += 1) {
       const mP = (d.sigPR[i] + d.sigPI[i]) * d.area[i];
@@ -375,7 +375,7 @@
   // lighter than the star; Disk.truncate clears where a companion's pull
   // makes orbits unstable.)
   function clearAround(d, dt) {
-    const M = d.mStar;
+    const M = Disk.starMass(d);
     for (const b of d.bodies) {
       const m = mass(b);
       if (m < 0.1 * ME || b.kind === 'star') continue;
@@ -405,7 +405,7 @@
   // 2017).
   const RES = { small: Math.pow(1.5, 2 / 3), giant: Math.pow(2, 2 / 3) };
   function encounters(d, dt, R) {
-    const M = d.mStar;
+    const M = Disk.starMass(d);
     const list = d.bodies.slice().sort((x, y) => x.a - y.a);
     const gasOn = !d.gone;
     for (let k = 0; k + 1 < list.length; k++) {
@@ -485,7 +485,7 @@
   }
 
   function resolve(d, p, q, R) {
-    const M = d.mStar;
+    const M = Disk.starMass(d);
     const big = mass(p) >= mass(q) ? p : q, small = big === p ? q : p;
     const mb = mass(big), ms = mass(small);
     // Safronov number of the bigger body: escape speed squared over orbital
@@ -611,7 +611,7 @@
   // disk beyond about 0.28 q (Breslau et al. 2014), steals or flings far
   // planets, and stirs up the orbits of the rest.
   function flyby(d, q, mPass) {
-    const M = d.mStar;
+    const M = Disk.starMass(d);
     const R = rng(d);
     const rT = 0.28 * q * Math.pow(mPass / M, -0.32);
     let stripped = 0;
@@ -648,7 +648,7 @@
     return {
       id: b.id, a: b.a, e: b.e, mass: m, earths: m / ME, kind: kind(b), radius: radiusEarths(b),
       water: b.mIce / Math.max(core(b), 1e-30), gas: b.mGas / Math.max(m, 1e-30), teq,
-      period: Math.pow(b.a, 1.5) / Math.sqrt(d.mStar), phase: b.phase, peri: b.peri, star: b.kind === 'star',
+      period: Math.pow(b.a, 1.5) / Math.sqrt(Disk.starMass(d)), phase: b.phase, peri: b.peri, star: b.kind === 'star',
       dropped: !!b.dropped, gap: !!b.gap, iso: !!b.iso,
     };
   }

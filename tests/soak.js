@@ -126,8 +126,17 @@ function toolsCheck() {
       tool({ tool: 'flyby', q: 150, mass: 1 });
       advance(w, 2e5);
       checkDisk(w, problems);
+      // The star dies, and the world goes on: pour gas around what's left,
+      // let the new disk live and go, and run far past the star's death.
+      System.runTo(w, 1.2e10);
+      tool({ tool: 'gas', r: 3, jupiters: 10 });
+      if (System.newDiskAge(w) === null) problems.push(`gas poured around the ${w.disk.star.phase} did not start a new disk`);
+      advance(w, 3e6);
+      advance(w, 1e13 - w.age);
+      checkDisk(w, problems);
+      if (!/dwarf|neutron|hole/.test(w.disk.star.phase)) problems.push(`at ${fmt(w.age)} the star is still a ${w.disk.star.phase}`);
       const B = System.budget(w);
-      console.log(`tools: ${((now() - t0) / 1000).toFixed(1)} s; mass budget ${B.start.toFixed(4)} -> ${B.sum.toFixed(4)} Msun`);
+      console.log(`tools: ${((now() - t0) / 1000).toFixed(1)} s, on to ${fmt(w.age)} (${w.disk.star.phase}); mass budget ${B.start.toFixed(4)} -> ${B.sum.toFixed(4)} Msun`);
     }
   } catch (e) {
     problems.push(`threw: ${e.stack || e}`);

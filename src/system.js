@@ -39,7 +39,7 @@
     const w = {
       version: 1, seed: String(seed), settings: Object.assign({}, s.cloud, s.disk),
       stage: 'cloud', cloud: null, disk: null, age: 0, cloudAge: 0, log: [], logId: 1,
-      history: [], nextSample: 0, n: opts.n || 2000, ended: false,
+      history: [], nextSample: 0, n: opts.n || 2000,
     };
     if (opts.start === 'disk') {
       w.stage = 'disk';
@@ -134,9 +134,10 @@
       'helium-burning giant': 'Helium has ignited in the core; the star shrinks back for a while.',
       'asymptotic giant': 'The star swells again, bigger than ever, and sheds its outer layers.',
       'planetary nebula': 'The star has puffed off its outer layers as a planetary nebula, laying bare its hot core.',
-      'white dwarf': 'Only the core is left: a white dwarf the size of the Earth, slowly cooling. Surviving planets drift outward as the star loses mass.',
+      'white dwarf': 'Only the core is left: a white dwarf the size of the Earth, slowly cooling. Surviving planets drift outward as the star loses mass. Time goes on: pour in gas to grow a new disk around it.',
+      'black dwarf': 'The white dwarf has cooled below 1,000 K: a black dwarf, cold and dark. None exist yet, because the universe is only 13.8 billion years old.',
       supergiant: 'A massive star\'s end is near: it has swollen into a supergiant.',
-      'neutron star': 'The core collapsed in a supernova, leaving a neutron star.',
+      'neutron star': 'The core collapsed in a supernova, leaving a neutron star. Pour in gas and planets can form again: the first planets ever found circle a pulsar.',
       'black hole': 'The core collapsed in a supernova, leaving a black hole.',
       'brown dwarf': 'The central object never got heavy enough to fuse hydrogen: a brown dwarf.',
     }[s.phase];
@@ -228,6 +229,13 @@
     return w.stage === 'disk' ? Star.stepLimit(w.disk.mStar, w.disk.age) : Infinity;
   }
 
+  // How old a disk poured in after the first one had gone is (null if there
+  // isn't one), so the clock can give it the pace of a young disk.
+  function newDiskAge(w) {
+    const d = w.disk;
+    return w.stage === 'disk' && !d.gone && d.rebornAt != null ? d.age - d.rebornAt : null;
+  }
+
   // The longest single step the disk would take right now (for the clock).
   function nextStep(w) {
     if (w.stage === 'cloud') return w.cloud.dt * w.cloud.units.years;
@@ -263,7 +271,7 @@
     for (const b of d.bodies) if (b.kind !== 'star') { planetMass += Planets.mass(b); if (Planets.mass(b) > 0.05 * ME) count++; }
     const hz = Star.habitableZone(Math.max(d.star.L, 1e-6));
     return {
-      stage: 'disk', phase: phase(w), age: w.age, starMass: d.mStar, star: d.star,
+      stage: 'disk', phase: phase(w), age: w.age, starMass: Disk.starMass(d), star: d.star,
       luminosity: d.star.lTotal, mdot: d.mdotStar, gas: T.gas, dust: T.dust, planetesimals: T.planetesimals,
       ice: T.ice, infall: T.infall, snowLine: T.snowLine, planetMass, planets: count, hz,
       diskRadius: Disk.radiusHolding(d, 0.9), gone: d.gone, goneAt: d.gone ? d.goneAt + (d.bornAt || 0) : d.goneAt, hole: d.hole,
@@ -290,7 +298,7 @@
     };
     out.bodies = d.bodies.map((b) => Planets.describe(d, b));
     out.star = d.star;
-    out.mStar = d.mStar;
+    out.mStar = Disk.starMass(d);
     if (w.lastCloud) { out.lastCloud = w.lastCloud; w.lastCloud = null; }
     return out;
   }
@@ -322,6 +330,13 @@
       case 'move': Planets.moveBody(d, msg.id, msg.a, msg.e); break;
       case 'remove': Planets.removeBody(d, msg.id); note(w, 'removed', 'You took a body out of the system.'); break;
       case 'clear': { const m = Disk.clear(d, msg.r0, msg.r1, msg.f || 0.9); if (m > 0) note(w, 'clear', `You swept ${fmtMass(m)} of gas out of the disk between ${fmtAU(msg.r0)} and ${fmtAU(msg.r1)}.`); break; }
+      case 'gas': {
+        const revives = d.gone;
+        const m = Disk.addGas(d, msg.r, (msg.jupiters || 10) * MJ);
+        w.initialMass += m;
+        note(w, 'gas', `You poured ${fmtMass(m)} of fresh gas and dust into orbit at ${fmtAU(msg.r)}.${revives ? ` A new disk is forming around the ${d.star.remnant && d.star.phase !== 'planetary nebula' ? d.star.phase : 'star'}.` : ''}`);
+        break;
+      }
       case 'dust': w.initialMass += Disk.addDust(d, msg.r0, msg.r1, msg.earths || 5); note(w, 'dust', `You scattered ${fmtEarths((msg.earths || 5) * ME)} of dust between ${fmtAU(msg.r0)} and ${fmtAU(msg.r1)}.`); break;
       case 'flyby': Planets.flyby(d, msg.q, msg.mass || 0.5); break;
       default: break;
@@ -366,6 +381,7 @@
       else if (k === 'disk') w.disk = o.disk ? Disk.restore(o.disk) : null;
       else w[k] = JSON.parse(JSON.stringify(o[k]));
     }
+    delete w.ended;   // older saves stopped for good at 20 billion years; worlds don't end now
     return w;
   }
 
@@ -386,7 +402,7 @@
     for (const c of d.companions) companions += c.mass;
     for (const p of d.infall) infall += p.m;
     const parts = {
-      star: d.mStar, companions, gas: T.gas, dust: T.dust, vapour, planetesimals: T.planetesimals, planets, infall,
+      star: Disk.starMass(d), shed: d.mStar - Disk.starMass(d), companions, gas: T.gas, dust: T.dust, vapour, planetesimals: T.planetesimals, planets, infall,
       escapedCloud: w.handLost || 0, jets: t.jets || 0, wind: t.wind || 0, photo: t.photo || 0, external: t.external || 0,
       dustLost: t.dustLost || 0, scattered: t.scattered || 0, ejected: t.ejected || 0, engulfed: t.engulfed || 0,
       stolen: t.stolen || 0, removed: t.removed || 0,
@@ -397,7 +413,7 @@
   }
 
   return {
-    SETTINGS, PHASES, defaults, create, budget, stepCloud, advance, nextStep, starStep, readings, frame, phase,
+    SETTINGS, PHASES, defaults, create, budget, stepCloud, advance, nextStep, starStep, newDiskAge, readings, frame, phase,
     tool, set, inspect, save, restore, runTo, fmtMass, fmtEarths, fmtAU,
   };
 });

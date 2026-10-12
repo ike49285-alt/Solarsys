@@ -145,14 +145,16 @@
     R = 0.0126 * Math.pow(mWD / 0.6, -1 / 3);
     L = Math.min(500, 0.1 * Math.pow(Math.max(cool, 1e4) / 1e7, -1.15));
     T = T_SUN * Math.pow(L / (R * R), 0.25);
-    return finish({ phase: cool < 3e4 ? 'planetary nebula' : 'white dwarf', remnant: 'white dwarf', sinceDeath: cool });
+    // Below about 1000 K it barely glows: a black dwarf, though none has had
+    // time to cool that far yet.
+    return finish({ phase: cool < 3e4 ? 'planetary nebula' : T < 1000 ? 'black dwarf' : 'white dwarf', remnant: 'white dwarf', sinceDeath: cool });
 
     function finish(o) {
       // Gas landing on the star shines as it lands: G M Mdot / R.
       // G Msun (Msun/yr) / Rsun is 3.14e7 Lsun.
       const lAcc = mdot > 0 ? 3.1415e7 * mass * mdot / R : 0;
       return {
-        mass, L, R, T, lAcc, lTotal: L + lAcc, phase: o.phase, remnant: o.remnant || remnant,
+        mass, built: m, L, R, T, lAcc, lTotal: L + lAcc, phase: o.phase, remnant: o.remnant || remnant,
         sinceDeath: o.sinceDeath || 0, rAU: R * RSUN_AU, mainSequenceLife: tMS, contraction: tKH,
       };
     }

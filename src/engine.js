@@ -25,9 +25,27 @@
   // play with, and quicker through the quiet billions of years. In old age
   // the star's brief phases hold it back too, so a red giant gets minutes on
   // screen, not a blink. At speed 1 a whole system takes about half an hour.
+  //
+  // After the star dies time goes on, quicker, with nothing to stop it: the
+  // remnant cools, and gas poured in grows a new disk, which gets the pace
+  // of a young one by its own age. Past a black dwarf's age, about 1e15
+  // years, time stops speeding up.
   const CLOUD_RATE = 120;
-  const LOG_RATE = { disk: 0.007, planets: 0.007, clearing: 0.007, impacts: 0.01, mature: 0.015, late: 0.01 };
+  const LOG_RATE = { disk: 0.007, planets: 0.007, clearing: 0.007, impacts: 0.01, mature: 0.015, late: 0.01, remnant: 0.05 };
   const STAR_STEPS = 5;          // at most this many of the star's step limits a second
+  const LATE_CAP = 1e13;         // years a second, at most
+  const MAX_AGE = 1e100;         // numbers stay sane, however long it's left running
+
+  // Years a second at speed 1 for a world past its collapse.
+  function pace(System, w) {
+    if (w.age >= MAX_AGE) return 0;
+    const ph = System.phase(w), star = w.disk.star;
+    const key = ph === 'late' && star && star.remnant ? 'remnant' : ph;
+    let rate = Math.min(Math.max(1, w.age) * (LOG_RATE[key] || 0.01), STAR_STEPS * System.starStep(w), LATE_CAP);
+    const young = System.newDiskAge(w);
+    if (young !== null) rate = Math.min(rate, Math.max(1e4, young) * LOG_RATE.disk);
+    return rate;
+  }
 
   function compose(F) {
     const Rng = F.RngFactory();
@@ -54,8 +72,7 @@
       if (!w) return 0;
       // While a finger stirs or pulls the cloud, time runs no faster than x1.
       if (w.stage === 'cloud') return CLOUD_RATE * (held ? Math.min(1, speed) : speed);
-      const rate = Math.max(1, w.age) * (LOG_RATE[System.phase(w)] || 0.01);
-      return Math.min(rate, STAR_STEPS * System.starStep(w)) * speed;
+      return pace(System, w) * speed;
     }
 
     function fail(e) {
@@ -82,7 +99,6 @@
           if (chunk <= 0) break;
           done += System.advance(w, chunk, 8);
           n++;
-          if (w.age > 2e10) { paused = true; w.ended = true; break; }
         }
       }
       return done;
@@ -97,7 +113,7 @@
       do {
         const left = ff.goal - w.age;
         runFor(w.stage === 'cloud' ? Infinity : Math.min(left, 0.04 * Math.max(1, w.age)), Math.max(1, BUDGET_MS - (now() - start)));
-        if (w.ended || w.stage !== ff.stage || System.phase(w) !== ff.phase || w.age >= ff.goal || starPhase() !== ff.star) {
+        if (w.stage !== ff.stage || System.phase(w) !== ff.phase || w.age >= ff.goal || starPhase() !== ff.star || (System.newDiskAge(w) !== null) !== ff.newDisk) {
           ff = null; debt = 0; recent.length = 0;
           return;
         }
@@ -112,7 +128,7 @@
 
     function sendFrame() {
       const f = System.frame(w);
-      f.paused = paused; f.speed = speed; f.rate = achieved; f.target = targetRate(); f.stepMs = stepMs; f.ended = !!w.ended;
+      f.paused = paused; f.speed = speed; f.rate = achieved; f.target = targetRate(); f.stepMs = stepMs;
       f.skipping = !!ff;
       f.stepYears = w.stage === 'cloud' ? System.nextStep(w) : 0;   // lets the view glide between collapse steps
       const transfer = [];
@@ -192,9 +208,14 @@
           case 'skip':
             // Hurry on to the next stage (or a tenfold age), showing it on the
             // way; skipping again while it runs stops it.
-            if (w && !broken && !w.ended) {
+            if (w && !broken && w.age < MAX_AGE) {
               if (ff) { ff = null; debt = 0; recent.length = 0; }
-              else ff = { stage: w.stage, phase: System.phase(w), star: starPhase(), goal: w.stage === 'cloud' ? Infinity : Math.max(1, w.age) * 10 };
+              else {
+                ff = {
+                  stage: w.stage, phase: System.phase(w), star: starPhase(), newDisk: System.newDiskAge(w) !== null,
+                  goal: w.stage === 'cloud' ? Infinity : Math.min(MAX_AGE, Math.max(1, w.age) * 10),
+                };
+              }
               dirty = true;
             }
             break;
@@ -239,5 +260,5 @@
     }
   }
 
-  return { compose, createHost, workerMain, start, BUDGET_MS, CLOUD_RATE, LOG_RATE, STAR_STEPS };
+  return { compose, createHost, workerMain, start, pace, BUDGET_MS, CLOUD_RATE, LOG_RATE, STAR_STEPS, LATE_CAP, MAX_AGE };
 });

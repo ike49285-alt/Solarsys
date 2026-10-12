@@ -35,6 +35,10 @@ left off.
    and the rest drift outward as it sheds mass. In the end only a white
    dwarf is left.
 
+The world doesn't end there. Time goes on while the white dwarf cools
+toward a black dwarf, and the Gas tool can grow a new disk, and new
+planets, around the dead star.
+
 ## Things to fiddle with
 
 **Tools in the cloud**
@@ -49,6 +53,8 @@ left off.
 - **Move:** drag a planet to a new orbit.
 - **Sweep:** drag to clear the gas and dust out of a band.
 - **Dust:** tap to scatter a ring of dust.
+- **Gas:** tap to pour a ring of fresh gas and dust into orbit. It
+  spreads into a new disk, even around a dead star.
 - **Flyby:** tap a distance, and another star passes that close.
 
 **Settings** (Settings tab): the cloud's mass, temperature, spin,

@@ -198,6 +198,11 @@
   function updateStar(d) {
     d.star = Star.at(d.mStar, d.age, d.mdotStar);
   }
+  // The star's mass now. d.mStar is what it was built from (its stellar
+  // track), but late in life it sheds much of that, and orbits feel only
+  // what's left. Until it starts shedding this is exactly d.mStar, gas
+  // that landed this step included.
+  function starMass(d) { return d.star ? d.mStar - (d.star.built - d.star.mass) : d.mStar; }
 
   // ---- Local conditions -----------------------------------------------------------
   // Temperature, sound speed, scale height, viscosity, gravitational
@@ -207,7 +212,7 @@
   function fields(d, frozen) {
     updateStar(d);
     const { r, re, sigG, alpha, T, cs, H, Om, vK, nu, Q, gamma, St1, fm, v1, vbar, Dd, vgas, mpeb } = d;
-    const M = d.mStar + companionMassInside(d);
+    const M = starMass(d) + companionMassInside(d);
     const L = Math.max(1e-4, d.star.lTotal);
     const tIrr0 = 220 * Math.pow(L, 0.25);
     const aBase = d.settings.alpha;
@@ -410,7 +415,7 @@
   // ---- Photoevaporation ------------------------------------------------------------------------
   function photoevaporate(d, dt) {
     const { r, area, sigG } = d;
-    const M = d.mStar;
+    const M = starMass(d);
     if (d.star && (d.star.remnant || d.star.phase === 'brown dwarf')) return 0;
     const lx = Math.pow(10, d.settings.xrays - 30);
     const mdotX = 6.25e-9 * Math.pow(M, -0.068) * Math.pow(lx, 1.14);
@@ -599,7 +604,7 @@
         for (let i = 0; i < NR && d.r[i] < rc; i++) {
           const f = 1 - Math.exp(-dt * d.Om[i] / 20);
           const m = (d.sigG[i] + d.sigDR[i] + d.sigDI[i] + d.sigV[i]) * f * d.area[i];
-          const share = c.mass / (c.mass + d.mStar);
+          const share = c.mass / (c.mass + starMass(d));
           d.mStar += m * (1 - share); c.mass += m * share;
           d.sigG[i] *= 1 - f; d.sigDR[i] *= 1 - f; d.sigDI[i] *= 1 - f; d.sigV[i] *= 1 - f;
         }
@@ -607,7 +612,7 @@
         const rt = 0.35 * c.a * (1 - c.e), rOut = Math.min(R_OUT, 2.5 * c.a * (1 + c.e));
         const iw = cellOf(rt) + 1;
         d.wall = Math.min(d.wall, iw);
-        const q = Math.min(1, c.mass / d.mStar);
+        const q = Math.min(1, c.mass / starMass(d));
         const mine = (0.1 + 0.9 * q) / (1.1 + 0.9 * q);   // the main star's share of the streams
         let gas = 0, rock = 0, ice = 0, vap = 0;
         for (let i = iw; i < NR && d.r[i] < rOut; i++) {
@@ -698,6 +703,18 @@
   }
   // Add dust (rock and ice in the usual mix) to the rings between r0 and r1,
   // `earths` Earth masses in all.
+  // Pour fresh gas, with its dust, into a ring around r (the page's tool);
+  // returns the mass added. A disk that had gone comes back to life, and
+  // keeps time by its own age from here (rebornAt), like a young one.
+  function addGas(d, rAU, mass) {
+    if (d.gone) {
+      d.gone = false; d.goneAt = null; d.hole = false; d.rebornAt = d.age;
+    }
+    deposit(d, rAU, mass);
+    fields(d);
+    return rAU < R_IN ? mass : mass * (1 + metallicity(d));
+  }
+
   // Scatter dust into a band (the page's tool); returns the mass added.
   function addDust(d, r0, r1, earths) {
     let a = 0;
@@ -738,6 +755,6 @@
   return {
     NR, R_IN, R_OUT, MEARTH, MJUP, G, SIG_CGS, T_ICE, ROCK, SETTINGS, clampSettings,
     fromCollapse, synthetic, step, fields, maxDt, totals, radiusHolding, snowLineRadius, cellOf,
-    removeGas, clear, addDust, metallicity, save, restore, updateStar,
+    removeGas, clear, addDust, addGas, metallicity, save, restore, updateStar, starMass,
   };
 });
