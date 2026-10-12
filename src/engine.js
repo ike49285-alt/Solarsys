@@ -19,8 +19,15 @@
   const LOOP_MS = 16;
   const FRAME_MS = 33;           // frames go out no more often than this
   const MAX_IN_FLIGHT = 2;
-  const CLOUD_RATE = 600;        // years a second in the collapse, at speed 1
-  const LOG_RATE = 0.12;         // afterwards, the fraction of the age that passes each second at speed 1
+  // How fast time runs at speed 1. In the collapse, years a second. After
+  // it, a fraction of the age each second (a log clock), set by the stage:
+  // slow while the disk lives and planets form, which is the part you can
+  // play with, and quicker through the quiet billions of years. In old age
+  // the star's brief phases hold it back too, so a red giant gets minutes on
+  // screen, not a blink. At speed 1 a whole system takes about half an hour.
+  const CLOUD_RATE = 120;
+  const LOG_RATE = { disk: 0.007, planets: 0.007, clearing: 0.007, impacts: 0.01, mature: 0.015, late: 0.01 };
+  const STAR_STEPS = 5;          // at most this many of the star's step limits a second
 
   function compose(F) {
     const Rng = F.RngFactory();
@@ -45,8 +52,10 @@
 
     function targetRate() {
       if (!w) return 0;
-      if (w.stage === 'cloud') return CLOUD_RATE * speed * (held ? 0.25 : 1);
-      return Math.max(1, w.age) * LOG_RATE * speed;
+      // While a finger stirs or pulls the cloud, time runs no faster than x1.
+      if (w.stage === 'cloud') return CLOUD_RATE * (held ? Math.min(1, speed) : speed);
+      const rate = Math.max(1, w.age) * (LOG_RATE[System.phase(w)] || 0.01);
+      return Math.min(rate, STAR_STEPS * System.starStep(w)) * speed;
     }
 
     function fail(e) {
@@ -59,7 +68,10 @@
       const start = now();
       let done = 0, n = 0;
       if (w.stage === 'cloud') {
-        while (w.stage === 'cloud' && (n === 0 || (done < years && now() - start < budget))) {
+        // A collapse step can't be split, so take one only once the clock
+        // has run up enough time for it (not one every slice regardless,
+        // which let the start of the collapse race ahead).
+        while (w.stage === 'cloud' && done + 0.5 * System.nextStep(w) <= years && now() - start < budget) {
           done += System.stepCloud(w);
           n++;
         }
@@ -102,6 +114,7 @@
       const f = System.frame(w);
       f.paused = paused; f.speed = speed; f.rate = achieved; f.target = targetRate(); f.stepMs = stepMs; f.ended = !!w.ended;
       f.skipping = !!ff;
+      f.stepYears = w.stage === 'cloud' ? System.nextStep(w) : 0;   // lets the view glide between collapse steps
       const transfer = [];
       if (f.cloud) for (const k of ['pos', 'vel', 'rho', 'temp']) transfer.push(f.cloud[k].buffer);
       if (f.disk) for (const k of Object.keys(f.disk)) if (f.disk[k] && f.disk[k].buffer) transfer.push(f.disk[k].buffer);
@@ -123,11 +136,13 @@
       } else if (!paused && !broken) {
         try {
           const rate = targetRate();
-          debt = Math.min(debt + rate * dt / 1000, rate * 0.25);
+          // Owed time is capped, so a stall never turns into a rush, but
+          // always covers at least one collapse step, so slow speeds still move.
+          debt = Math.min(debt + rate * dt / 1000, Math.max(rate * 0.25, w.stage === 'cloud' ? 2 * System.nextStep(w) : 0));
           let budget = BUDGET_MS;
           if (inFlight < MAX_IN_FLIGHT) budget = Math.max(4, Math.min(budget, lastFrame + FRAME_MS - t));
           const done = runFor(debt, budget);
-          debt = Math.max(0, debt - done);
+          debt -= done;   // a collapse step's overshoot is carried, not forgiven
           dirty = true;
         } catch (e) { fail(e); }
       }
@@ -224,5 +239,5 @@
     }
   }
 
-  return { compose, createHost, workerMain, start, BUDGET_MS, CLOUD_RATE, LOG_RATE };
+  return { compose, createHost, workerMain, start, BUDGET_MS, CLOUD_RATE, LOG_RATE, STAR_STEPS };
 });

@@ -354,7 +354,7 @@
     if (!fromEngine) engine.send({ type: p ? 'pause' : 'play' });
   }
   function setSpeed(exp, quiet) {
-    speedExp = Math.max(-3, Math.min(4, exp));
+    speedExp = Math.max(-3, Math.min(6, exp));
     const sp = Math.pow(2, speedExp);
     $('speed').value = String(speedExp);
     $('speed-out').textContent = sp >= 1 ? `×${sp}` : `×1/${Math.round(1 / sp)}`;

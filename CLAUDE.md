@@ -50,6 +50,15 @@ node tools/build.mjs /path/to/out.html     # default dist/solar-nebula.html
   error pauses the world instead of losing it. Skip is a fast-forward of
   back-to-back slices that keeps sending frames. Never block the worker
   for long.
+- **The clock's pace** is set in `engine.js` (`CLOUD_RATE`, `LOG_RATE`
+  per stage, `STAR_STEPS`). At ×1 the user wanted a whole system to take
+  longer than ten minutes, so it now takes about half an hour, most of
+  it in the disk and planet-forming stages. Check with
+  `node tools/pace.js [seed]` after changing it. A collapse step can't be
+  split, and early on one covers 75 years. So the engine takes a step only
+  once the clock owes it, carrying any overshoot, and the view glides
+  particles along their velocities in between. Forcing a step every slice
+  made the early collapse run about 17 times too fast.
 - `src/render.js`: canvas drawing. The disk is a smooth radial-gradient
   glow from the rings' surface density, so gaps and pebble traps show,
   with drifting particles on top.

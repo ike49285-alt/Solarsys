@@ -88,6 +88,10 @@
     }
     const gasSet = makeSet(N_GAS, 11), dustSet = makeSet(N_DUST, 23), pltSet = makeSet(N_PLTS, 37);
     let morph = null;          // { t, dur } while the cloud turns into the disk
+    // Early in the collapse a step covers decades and the clock may take one
+    // only every half second, so between steps each particle glides on along
+    // its velocity: when this state arrived, and how fast time is running.
+    const glide = { age: -1, wall: 0 };
     const refMass = { gas: 0, dust: 0, plts: 0 };
     const peaks = { gas: 0, dust: 0 };   // brightest sigma * r so far (see glow)
     const bodyPhase = new Map();
@@ -151,6 +155,7 @@
 
     function setFrame(f) {
       const first = frame && frame.stage === 'cloud' && f.stage === 'disk';
+      if (f.stage === 'cloud' && f.age !== glide.age) { glide.age = f.age; glide.wall = performance.now(); }
       // A disk reads best from a bit more above than the cloud did.
       if (f.stage === 'disk' && (!frame || frame.stage !== 'disk') && !cam.turned) cam.tiltGoal = DISK_TILT;
       frame = f;
@@ -237,8 +242,14 @@
       const n = c.rho.length;
       const mean = 3 / (4 * Math.PI);
       const size = Math.max(3, Math.round(4.5 * dpr));
+      // Years since this state, at the pace time is really running, no more
+      // than a step and a half ahead; as AU per km/s.
+      const rate = frame.rate > 0 ? Math.min(frame.target, frame.rate) : frame.target;
+      const lead = paused || frame.paused || !(rate > 0) ? 0
+        : clamp((performance.now() - glide.wall) / 1000 * rate, 0, 1.5 * (frame.stepYears || 0));
+      const k = lead * 0.2108;
       for (let i = 0; i < n; i++) {
-        project(c.pos[i * 3], c.pos[i * 3 + 1], c.pos[i * 3 + 2], P);
+        project(c.pos[i * 3] + c.vel[i * 3] * k, c.pos[i * 3 + 1] + c.vel[i * 3 + 1] * k, c.pos[i * 3 + 2] + c.vel[i * 3 + 2] * k, P);
         if (P[0] < -20 || P[1] < -20 || P[0] > W + 20 || P[1] > H + 20) continue;
         const dens = c.rho[i] / mean;
         let rgb, a;

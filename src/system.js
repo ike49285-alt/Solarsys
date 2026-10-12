@@ -222,6 +222,12 @@
   // star's own age (from its birth), which is what the physics needs.
   function clock(d) { return d.age + (d.bornAt || 0); }
 
+  // The step the star's own changes allow right now (Infinity while it's
+  // steady), so the clock can slow down through its brief late phases.
+  function starStep(w) {
+    return w.stage === 'disk' ? Star.stepLimit(w.disk.mStar, w.disk.age) : Infinity;
+  }
+
   // The longest single step the disk would take right now (for the clock).
   function nextStep(w) {
     if (w.stage === 'cloud') return w.cloud.dt * w.cloud.units.years;
@@ -391,7 +397,7 @@
   }
 
   return {
-    SETTINGS, PHASES, defaults, create, budget, stepCloud, advance, nextStep, readings, frame, phase,
+    SETTINGS, PHASES, defaults, create, budget, stepCloud, advance, nextStep, starStep, readings, frame, phase,
     tool, set, inspect, save, restore, runTo, fmtMass, fmtEarths, fmtAU,
   };
 });

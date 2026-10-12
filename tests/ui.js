@@ -79,8 +79,9 @@ fs.mkdirSync(shots, { recursive: true });
   console.log('after tools:', JSON.stringify(await state()));
   await shot('3-protostar');
 
-  // Skip to the disk: the rest of the collapse runs flat out, still drawn.
-  { const t0 = Date.now(); await skip(120000); console.log(`skipped the collapse in ${((Date.now() - t0) / 1000).toFixed(1)} s`); }
+  // Skip to the disk: the rest of the collapse runs flat out, still drawn,
+  // stopping once when the protostar forms if it hasn't yet.
+  { const t0 = Date.now(); for (let k = 0; k < 3 && (await state()).stage === 'cloud'; k++) await skip(120000); console.log(`skipped the collapse in ${((Date.now() - t0) / 1000).toFixed(1)} s`); }
   if ((await state()).stage !== 'disk') errors.push('skipping from the cloud did not reach the disk');
   await p.waitForTimeout(1500);
   console.log('disk:', JSON.stringify(await state()));

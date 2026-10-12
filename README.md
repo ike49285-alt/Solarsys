@@ -61,6 +61,11 @@ settings act at once; cloud settings take effect on the next cloud.
 orbits in the disk. The Profile tab charts the disk's gas, dust,
 planetesimals and temperature against distance from the star.
 
+**Speed:** at ×1 a whole system takes about half an hour. Most of that
+is the disk and the planets forming, the part you can play with. The quiet
+billions of years go quicker, and the clock slows again for the star's
+last giant phases. The slider runs from ×1/8 to ×64.
+
 **Skip** hurries on to the next stage, still showing it as it goes.
 Tap it again to stop.
 
@@ -126,4 +131,5 @@ doesn't restore exactly. The page test uses every tool and view on a
 phone-sized screen and fails on any page error.
 
 `node tools/build.mjs` writes `dist/solar-nebula.html`: the page with
-its scripts inlined into one file.
+its scripts inlined into one file. `node tools/pace.js [seed]` shows how
+long each stage takes on screen at ×1.
