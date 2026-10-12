@@ -321,6 +321,7 @@
     $('log').textContent = '';
     stageKey = null;
     hideInspect();
+    view.reset();
     view.fit();
     engine.send({ type: 'init', seed, settings, start });
     setPaused(false);
@@ -589,7 +590,14 @@
     buildRails(f.stage);
     showPhase(f.phase);
     $('age').textContent = fmtAge(f.age);
-    $('rate').textContent = f.ended ? 'The end of this system’s story.' : paused ? `Paused at ${fmtAge(f.age)}` : `${fmtRate(f.rate)}${f.rate > 0 && f.rate < 0.5 * f.target ? ' (this device’s limit)' : ''}`;
+    $('rate').textContent = f.ended ? 'The end of this system’s story.' : f.skipping ? `Skipping ahead, ${fmtRate(f.rate)}` : paused ? `Paused at ${fmtAge(f.age)}` : `${fmtRate(f.rate)}${f.rate > 0 && f.rate < 0.5 * f.target ? ' (this device’s limit)' : ''}`;
+    const skip = $('skip');
+    if (skip.getAttribute('aria-pressed') !== String(!!f.skipping)) {
+      skip.setAttribute('aria-pressed', String(!!f.skipping));
+      skip.textContent = f.skipping ? 'Stop ■' : 'Skip ▸▸';
+      skip.title = f.skipping ? 'Stop skipping' : 'Hurry on to the next stage';
+    }
+    skip.disabled = !!f.ended;
     $('sp-gas-label').textContent = f.stage === 'cloud' ? 'Gas left in the cloud' : 'Gas in the disk';
 
     // Stats.

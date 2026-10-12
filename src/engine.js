@@ -40,6 +40,7 @@
     let w = null, paused = false, speed = 1, held = false;
     let timer = null, last = 0, lastFrame = 0, inFlight = 0, dirty = true, broken = false;
     let stepMs = 1, debt = 0, achieved = 0;
+    let ff = null;                 // fast-forwarding to the next stage: { phase, goal }
     const recent = [];
 
     function targetRate() {
@@ -75,9 +76,32 @@
       return done;
     }
 
+    // A fast-forward runs whole slices back to back, still yielding between
+    // them, until the stage changes or the age has grown tenfold. Late on,
+    // a slice could cover billions of years, so it looks again every few
+    // percent of the age rather than sailing past the next stage.
+    function fastForward() {
+      const start = now();
+      do {
+        const left = ff.goal - w.age;
+        runFor(w.stage === 'cloud' ? Infinity : Math.min(left, 0.04 * Math.max(1, w.age)), Math.max(1, BUDGET_MS - (now() - start)));
+        if (w.ended || w.stage !== ff.stage || System.phase(w) !== ff.phase || w.age >= ff.goal || starPhase() !== ff.star) {
+          ff = null; debt = 0; recent.length = 0;
+          return;
+        }
+      } while (now() - start < BUDGET_MS);
+    }
+
+    // In old age the star itself is the story, so a skip stops at each of
+    // its changes (giant, helium burning, white dwarf, ...).
+    function starPhase() {
+      return w.stage === 'disk' && System.phase(w) === 'late' && w.disk.star ? w.disk.star.phase : null;
+    }
+
     function sendFrame() {
       const f = System.frame(w);
       f.paused = paused; f.speed = speed; f.rate = achieved; f.target = targetRate(); f.stepMs = stepMs; f.ended = !!w.ended;
+      f.skipping = !!ff;
       const transfer = [];
       if (f.cloud) for (const k of ['pos', 'vel', 'rho', 'temp']) transfer.push(f.cloud[k].buffer);
       if (f.disk) for (const k of Object.keys(f.disk)) if (f.disk[k] && f.disk[k].buffer) transfer.push(f.disk[k].buffer);
@@ -94,7 +118,9 @@
       const t = now();
       const dt = Math.min(250, t - last);
       last = t;
-      if (!paused && !broken) {
+      if (ff && !broken) {
+        try { fastForward(); dirty = true; } catch (e) { ff = null; fail(e); }
+      } else if (!paused && !broken) {
         try {
           const rate = targetRate();
           debt = Math.min(debt + rate * dt / 1000, rate * 0.25);
@@ -114,7 +140,7 @@
       if (inFlight < MAX_IN_FLIGHT && (dirty || paused) && now() - lastFrame >= FRAME_MS - 1) {
         try { sendFrame(); } catch (e) { fail(e); }
       }
-      timer = setTimeout(loop, paused ? 50 : Math.max(1, LOOP_MS - (now() - t)));
+      timer = setTimeout(loop, paused && !ff ? 50 : Math.max(1, LOOP_MS - (now() - t)));
     }
 
     function start() {
@@ -122,7 +148,7 @@
       if (!timer) timer = setTimeout(loop, 0);
     }
 
-    function reset() { debt = 0; recent.length = 0; inFlight = 0; broken = false; dirty = true; }
+    function reset() { debt = 0; recent.length = 0; inFlight = 0; broken = false; dirty = true; ff = null; }
 
     return function onMessage(msg) {
       try {
@@ -141,7 +167,7 @@
             break;
           case 'ack': inFlight = Math.max(0, inFlight - 1); break;
           case 'speed': speed = Math.max(0.05, Math.min(64, +msg.speed || 1)); debt = 0; recent.length = 0; break;
-          case 'pause': paused = true; dirty = true; break;
+          case 'pause': paused = true; ff = null; dirty = true; break;
           case 'play': if (!broken) { paused = false; debt = 0; last = now(); } break;
           case 'hold': held = !!msg.on; break;
           case 'tool': if (w) { System.tool(w, msg); dirty = true; } break;
@@ -149,16 +175,12 @@
           case 'inspect': if (w) post({ type: 'inspected', info: System.inspect(w, msg.id) }); break;
           case 'save': if (w) post({ type: 'state', state: System.save(w), reason: msg.reason }); break;
           case 'skip':
-            // Jump ahead to the next stage (or by a factor of ten in age).
-            if (w && !broken) {
-              const startAge = w.age, ph = System.phase(w);
-              const t0 = now();
-              if (w.stage === 'cloud') { while (w.stage === 'cloud' && now() - t0 < 30000) System.stepCloud(w); }
-              else {
-                const goal = startAge * 10;
-                while (w.age < goal && System.phase(w) === ph && now() - t0 < 4000) System.advance(w, Math.max(1, System.nextStep(w)) * 4, 8);
-              }
-              debt = 0; recent.length = 0; dirty = true;
+            // Hurry on to the next stage (or a tenfold age), showing it on the
+            // way; skipping again while it runs stops it.
+            if (w && !broken && !w.ended) {
+              if (ff) { ff = null; debt = 0; recent.length = 0; }
+              else ff = { stage: w.stage, phase: System.phase(w), star: starPhase(), goal: w.stage === 'cloud' ? Infinity : Math.max(1, w.age) * 10 };
+              dirty = true;
             }
             break;
           case 'runTo':  // tests: advance synchronously to an age

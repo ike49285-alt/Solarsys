@@ -31,7 +31,24 @@ fs.mkdirSync(shots, { recursive: true });
   p.on('pageerror', (e) => errors.push(`page error: ${e.message}`));
   p.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
   await p.goto('file://' + page);
-  const state = () => p.evaluate(() => { const f = window.__nebula.latest; return f && { stage: f.stage, phase: f.phase, age: f.age, bodies: (f.bodies || []).length, rate: f.rate }; });
+  const state = () => p.evaluate(() => { const f = window.__nebula.latest; return f && { stage: f.stage, phase: f.phase, age: f.age, bodies: (f.bodies || []).length, rate: f.rate, skipping: !!f.skipping }; });
+  // Skip, then wait for the skip to finish (tapping again would stop it).
+  // The page has to keep drawing new frames all the way through.
+  const skip = async (limitMs) => {
+    const ages = new Set();
+    await p.click('#skip');
+    const t0 = Date.now();
+    let s = await state();
+    for (let k = 0; Date.now() - t0 < limitMs; k++) {
+      await p.waitForTimeout(250);
+      s = await state();
+      ages.add(s.age);
+      if (!s.skipping && k > 1) break;
+    }
+    if (s.skipping) errors.push(`a skip was still running after ${limitMs / 1000} s`);
+    if (Date.now() - t0 > 1500 && ages.size < 3) errors.push(`the page stopped getting frames while skipping (${ages.size} different ages)`);
+    return s;
+  };
   const shot = (name) => p.screenshot({ path: path.join(shots, `${name}.png`) });
   const sky = await p.locator('#sky-canvas').boundingBox();
   const at = (fx, fy) => [sky.x + sky.width * fx, sky.y + sky.height * fy];
@@ -62,9 +79,9 @@ fs.mkdirSync(shots, { recursive: true });
   console.log('after tools:', JSON.stringify(await state()));
   await shot('3-protostar');
 
-  // Skip to the disk.
-  await p.click('#skip');
-  for (let k = 0; k < 60 && (await state()).stage !== 'disk'; k++) await p.waitForTimeout(500);
+  // Skip to the disk: the rest of the collapse runs flat out, still drawn.
+  { const t0 = Date.now(); await skip(120000); console.log(`skipped the collapse in ${((Date.now() - t0) / 1000).toFixed(1)} s`); }
+  if ((await state()).stage !== 'disk') errors.push('skipping from the cloud did not reach the disk');
   await p.waitForTimeout(1500);
   console.log('disk:', JSON.stringify(await state()));
   await shot('4-disk');
@@ -83,9 +100,9 @@ fs.mkdirSync(shots, { recursive: true });
 
   // On through the stages.
   for (let k = 0; k < 4; k++) {
-    await p.click('#skip');
-    await p.waitForTimeout(2500);
-    console.log('skip:', JSON.stringify(await state()));
+    const t0 = Date.now();
+    const s = await skip(60000);
+    console.log(`skip (${((Date.now() - t0) / 1000).toFixed(1)} s):`, JSON.stringify(s));
   }
   await shot('7-later');
   await useTool('move');

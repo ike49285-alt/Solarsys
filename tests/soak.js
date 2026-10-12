@@ -96,7 +96,47 @@ function checkSaveRestore(w, problems) {
   }
 }
 
-let failed = false;
+// Every tool, used the way the page sends it, on a small cloud and then its
+// disk; the world must stay sound and the mass budget must still add up.
+function toolsCheck() {
+  const problems = [];
+  const t0 = now();
+  try {
+    const w = System.create('Tools-1', {}, { n: 600 });
+    const tool = (msg) => System.tool(w, Object.assign({ type: 'tool' }, msg));
+    for (let k = 0; w.stage === 'cloud' && k < 40000; k++) {
+      if (k === 20) tool({ tool: 'stir', p: [300, 0, 0], d: [0, 0, -1], v: [0, 1.5, 0], radius: 400 });
+      if (k === 40) tool({ tool: 'pull', p: [-200, 300, 0], mass: 0.3 });
+      if (k === 80) tool({ tool: 'pull', p: null });
+      if (k === 100) tool({ tool: 'gas', p: [0, -500, 0], count: 150, radius: 300 });
+      if (k === 140) tool({ tool: 'blast', d: [1, 0, 0], speed: 0.8 });
+      System.stepCloud(w);
+      if (k % 500 === 0 && w.cloud) checkCloud(w, problems);
+    }
+    if (w.stage !== 'disk') problems.push('the collapse never finished');
+    else {
+      advance(w, 2e4);
+      tool({ tool: 'planet', a: 5, earths: 318 });
+      tool({ tool: 'planet', a: 0.8, earths: 1 });
+      tool({ tool: 'dust', r0: 9, r1: 11, earths: 10 });
+      tool({ tool: 'clear', r0: 20, r1: 40 });
+      advance(w, 5e4);
+      const b = w.disk.bodies.find((x) => x.kind !== 'star');
+      if (b) tool({ tool: 'move', id: b.id, a: b.a * 1.5 });
+      tool({ tool: 'flyby', q: 150, mass: 1 });
+      advance(w, 2e5);
+      checkDisk(w, problems);
+      const B = System.budget(w);
+      console.log(`tools: ${((now() - t0) / 1000).toFixed(1)} s; mass budget ${B.start.toFixed(4)} -> ${B.sum.toFixed(4)} Msun`);
+    }
+  } catch (e) {
+    problems.push(`threw: ${e.stack || e}`);
+  }
+  if (problems.length) console.log(`  tools FAILED:\n    ${problems.slice(0, 12).join('\n    ')}`);
+  return problems.length === 0;
+}
+
+let failed = !toolsCheck();
 for (const seed of seeds) {
   const problems = [];
   const t0 = now();

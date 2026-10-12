@@ -36,7 +36,9 @@
   function createView(canvas) {
     const ctx = canvas.getContext('2d', { alpha: false });
     let W = 0, H = 0, dpr = 1;
-    const cam = { yaw: 0.6, tilt: 1.05, scale: 0.2, cx: 0, cy: 0, auto: true, target: 0.2 };
+    // tiltGoal: a tilt the camera eases to by itself (until you turn it).
+    const cam = { yaw: 0.6, tilt: 1.05, scale: 0.2, cx: 0, cy: 0, auto: true, target: 0.2, tiltGoal: null, turned: false };
+    const DISK_TILT = 0.85;
     let frame = null, layer = 'light', selected = null, paused = false;
     let refR = 1000, vt = 0;
     const marks = [];        // transient effects (flyby tracks, taps)
@@ -87,6 +89,7 @@
     const gasSet = makeSet(N_GAS, 11), dustSet = makeSet(N_DUST, 23), pltSet = makeSet(N_PLTS, 37);
     let morph = null;          // { t, dur } while the cloud turns into the disk
     const refMass = { gas: 0, dust: 0, plts: 0 };
+    const peaks = { gas: 0, dust: 0 };   // brightest sigma * r so far (see glow)
     const bodyPhase = new Map();
 
     // Radii for quantiles q of the mass in sigma (per ring) between edges re.
@@ -148,18 +151,26 @@
 
     function setFrame(f) {
       const first = frame && frame.stage === 'cloud' && f.stage === 'disk';
+      // A disk reads best from a bit more above than the cloud did.
+      if (f.stage === 'disk' && (!frame || frame.stage !== 'disk') && !cam.turned) cam.tiltGoal = DISK_TILT;
       frame = f;
       if (f.stage === 'disk') {
         const d = f.disk;
         const mg = placeByMass(gasSet, d.sigG, d.re);
+        gasSet.rMid = Math.max(1e-3, gasSet.r[gasSet.n >> 1]);
         const md = placeByMass(dustSet, d.sigD, d.re);
         const mp = placeByMass(pltSet, d.sigP, d.re);
         refMass.gas = Math.max(refMass.gas, mg); refMass.dust = Math.max(refMass.dust, md); refMass.plts = Math.max(refMass.plts, mp);
         gasSet.mass = mg; dustSet.mass = md; pltSet.mass = mp;
         if ((first || f.lastCloud) && f.lastCloud) startMorph(f.lastCloud);
-      } else {
-        refMass.gas = refMass.dust = refMass.plts = 0;
-      }
+      } else forget();
+    }
+
+    // A new world: drop what the old one left behind.
+    function forget() {
+      refMass.gas = refMass.dust = refMass.plts = 0;
+      peaks.gas = peaks.dust = 0;
+      bodyPhase.clear();
     }
 
     // Start each gas display particle where a cloud particle was, matched by
@@ -197,6 +208,10 @@
       // Camera follows the system unless you've zoomed by hand.
       const want = Math.min(W, H) * 0.47 / fitRadius();
       if (cam.auto) cam.scale = cam.scale * Math.exp(clamp(dt * 1.6, 0, 1) * Math.log(want / cam.scale));
+      if (cam.tiltGoal !== null) {
+        cam.tilt += (cam.tiltGoal - cam.tilt) * clamp(dt * 1.2, 0, 1);
+        if (Math.abs(cam.tiltGoal - cam.tilt) < 0.002) { cam.tilt = cam.tiltGoal; cam.tiltGoal = null; }
+      }
       refR = refR * Math.exp(clamp(dt, 0, 1) * Math.log(fitRadius() / refR));
       B = basis();
 
@@ -289,13 +304,25 @@
       if (f.readings.hz && (layer === 'orbits' || f.readings.gone)) ring(f.readings.hz.inner, f.readings.hz.outer, 'rgba(127,224,168,0.07)', 'rgba(127,224,168,0.35)');
       if (!f.readings.gone || layer === 'heat') circle(f.readings.snowLine, layer === 'light' ? 'rgba(143,208,255,0.25)' : 'rgba(143,208,255,0.7)', [5, 6]);
 
+      // The disk as a smooth glow, ring by ring, so the gaps planets carve and
+      // the rings where pebbles pile up show; drifting sparkle goes on top.
+      const fadeIn = morph ? ease : 1;
+      if (layer === 'light') glow(d, d.sigG, 'gas', (i) => ramp(LIGHT, 0.25 + 0.75 * tempT(d.T[i])), 0.8 * fadeIn);
+      else if (layer === 'heat') glow(d, d.sigG, 'gas', (i) => ramp(HEAT, tempT(d.T[i])), 0.55 * fadeIn, 3);
+      else if (layer === 'dust') glow(d, d.sigD, 'dust', (i) => mixRGB([255, 196, 120], [150, 205, 255], clamp(d.ice[i], 0, 1)), 0.7 * fadeIn, 1.5);
+
       // Gas.
       const gasFade = refMass.gas > 0 ? clamp(Math.pow(gasSet.mass / refMass.gas, 0.3), 0, 1) : 0;
       if (gasSet.mass > 0 && gasFade > 0.02) {
-        const base = layer === 'dust' || layer === 'orbits' ? 0.1 : 0.42;
-        const size = Math.max(3, Math.round(4 * dpr));
+        const base = layer === 'dust' || layer === 'orbits' ? 0.1 : 0.15;
+        // The display particles crowd together towards the star, so the inner
+        // ones are drawn smaller and fainter: otherwise the middle of the disk
+        // just adds up to white and hides its rings and gaps.
+        const rMid = gasSet.rMid || 1;
         for (let i = 0; i < gasSet.n; i++) {
           const r = gasSet.r[i];
+          const near = Math.sqrt(r / rMid);
+          const size = Math.max(2, Math.round(3.5 * dpr * clamp(near, 0.35, 1.2)));
           gasSet.phi[i] += omega(r) * step;
           const k = ringIndex(re, r);
           const h = d.H[k] * gasSet.zeta[i];
@@ -307,7 +334,7 @@
           if (P[0] < -10 || P[1] < -10 || P[0] > W + 10 || P[1] > H + 10) continue;
           const T = d.T[k];
           const rgb = layer === 'heat' ? ramp(HEAT, tempT(T)) : ramp(LIGHT, 0.2 + 0.8 * tempT(T));
-          ctx.globalAlpha = base * gasFade * (morph ? 0.6 + 0.4 * ease : 1);
+          ctx.globalAlpha = base * gasFade * clamp(near, 0.4, 1) * (morph ? 0.6 + 0.4 * ease : 1);
           ctx.drawImage(sprite(rgb, size), P[0] - size, P[1] - size);
         }
       }
@@ -324,7 +351,7 @@
           project(r * Math.cos(dustSet.phi[i]), r * Math.sin(dustSet.phi[i]), d.H[k] * 0.25 * dustSet.zeta[i], P);
           const ice = d.ice[k];
           ctx.fillStyle = ice > 0.3 ? 'rgb(150,205,255)' : 'rgb(255,196,120)';
-          ctx.globalAlpha = (layer === 'dust' ? 0.9 : 0.55) * dustFade * (morph ? ease : 1);
+          ctx.globalAlpha = (layer === 'dust' ? 0.9 : 0.3) * dustFade * (morph ? ease : 1);
           ctx.fillRect(P[0], P[1], sz, sz);
         }
       }
@@ -362,9 +389,9 @@
         const pos = orbitPos(b, ph);
         project(pos[0], pos[1], 0, P);
         if (b.star) { ctx.globalCompositeOperation = 'lighter'; drawStarAt(pos[0], pos[1], 0, { L: Math.pow(b.mass, 3.5), T: 3200 + 2600 * Math.min(1, b.mass) }); ctx.globalCompositeOperation = 'source-over'; continue; }
-        const px = clamp(2 + 2.4 * Math.pow(Math.max(b.radius, 0.05), 0.6), 1.5, 14) * dpr * (big ? 1 : 0.6);
+        const px = clamp(1.8 + 1.7 * Math.pow(Math.max(b.radius, 0.05), 0.6), 1.5, 9) * dpr * (big ? 1 : 0.45);
         ctx.fillStyle = KIND_COLOURS[b.kind] || '#ccc';
-        ctx.globalAlpha = big ? 1 : 0.55;
+        ctx.globalAlpha = big ? 1 : 0.4;  // embryos: still growing, kept quiet
         ctx.beginPath(); ctx.arc(P[0], P[1], px, 0, TAU); ctx.fill();
         if (b.kind === 'gas giant' || b.kind === 'hot Jupiter') {
           ctx.globalAlpha = 0.35; ctx.fillStyle = '#8a6a48';
@@ -376,6 +403,44 @@
       }
       for (const id of bodyPhase.keys()) if (!seen.has(id)) bodyPhase.delete(id);
       ctx.globalCompositeOperation = 'lighter';
+    }
+
+    // A face-on disk seen tilted is an ellipse squashed by cos(tilt), so the
+    // whole profile can go in one radial gradient: a colour stop per ring,
+    // its brightness from the square root of sigma * r (flat for a typical
+    // disk, so gaps and rings stand out), dimming gently as the disk drains
+    // compared with the most it has held. `boost` lifts thin parts.
+    function glow(d, sig, key, rgbOf, gain, boost) {
+      const n = sig.length;
+      let peak = 0;
+      for (let i = 0; i < n; i++) { const v = sig[i] * d.r[i]; if (v > peak) peak = v; }
+      peaks[key] = Math.max(peaks[key], peak);
+      if (!(peak > 0) || !(gain > 0)) return;
+      let outer = 0;
+      for (let i = n - 1; i >= 0; i--) if (sig[i] * d.r[i] > 1e-3 * peak) { outer = d.re[i + 1]; break; }
+      const R = outer * cam.scale;
+      if (!(R > 2)) return;
+      const fade = Math.pow(peak / peaks[key], 0.25);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
+      let last = -1, stops = 0;
+      for (let i = 0; i < n && d.r[i] <= outer; i++) {
+        const px = d.r[i] * cam.scale;
+        if (px - last < 0.75 * dpr && d.re[i + 1] < outer) continue;   // finer than a pixel
+        const a = gain * fade * clamp((boost || 1) * Math.sqrt(sig[i] * d.r[i] / peak), 0, 1);
+        const c = rgbOf(i);
+        const rgb = `${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])}`;
+        if (!stops) g.addColorStop(0, `rgba(${rgb},0)`);
+        g.addColorStop(clamp(px / R, 0, 1), `rgba(${rgb},${a.toFixed(3)})`);
+        last = px; stops++;
+      }
+      if (!stops) return;
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.save();
+      ctx.translate(cam.cx, cam.cy);
+      ctx.scale(1, Math.max(0.02, Math.cos(cam.tilt)));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
+      ctx.restore();
     }
 
     function orbitPos(b, M) {
@@ -517,17 +582,18 @@
     // ---- Controls -----------------------------------------------------------------------------------
     return {
       setFrame, draw, pick, toPlane, toView, dragVector, auPerPixel,
+      reset() { forget(); frame = null; morph = null; gasSet.from = null; marks.length = 0; },
       setLayer(l) { layer = l; },
       setSelected(id) { selected = id; },
       setPaused(p) { paused = p; },
-      rotate(dx, dy) { cam.yaw -= dx * 0.008; cam.tilt = clamp(cam.tilt + dy * 0.008, 0, Math.PI * 0.49); },
+      rotate(dx, dy) { cam.yaw -= dx * 0.008; cam.tilt = clamp(cam.tilt + dy * 0.008, 0, Math.PI * 0.49); cam.turned = true; cam.tiltGoal = null; },
       zoom(f) { cam.auto = false; cam.scale = clamp(cam.scale * f, 1e-4, 1e5); },
       fit() { cam.auto = true; },
       isAuto() { return cam.auto; },
       mark(m) { marks.push(Object.assign({ t: 0, dur: 0.8 }, m)); },
       pointer(m) { pointerMark = m; },
       view() { return { yaw: cam.yaw, tilt: cam.tilt }; },
-      setView(v) { if (v && Number.isFinite(v.yaw)) { cam.yaw = v.yaw; cam.tilt = clamp(v.tilt, 0, Math.PI * 0.49); } },
+      setView(v) { if (v && Number.isFinite(v.yaw)) { cam.yaw = v.yaw; cam.tilt = clamp(v.tilt, 0, Math.PI * 0.49); cam.turned = true; cam.tiltGoal = null; } },
       kindColour(k) { return KIND_COLOURS[k] || '#ccc'; },
     };
   }

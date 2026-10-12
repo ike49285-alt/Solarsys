@@ -193,11 +193,15 @@
         const mCrit = 10 * ME * Math.pow(Math.max(sRate / ME, 1e-12) / 1e-6, 0.25);
         if (c >= Math.min(mCrit, 30 * ME) || b.mGas > 0.1 * c) {
           const mE = mass(b) / ME;
+          // The envelope contracts on 10^b (M/M_Earth)^-3 years (Ida & Lin
+          // 2004); b depends on the dust in the envelope and is uncertain by
+          // a couple of dex. b = 10 gives giants around a quarter of
+          // Sun-like stars, near what surveys find.
           // Close to the star, hot disk gas keeps flowing through the
           // atmosphere and stops it cooling (recycling: Ormel et al. 2015;
           // Lambrechts & Lega 2017), so close-in cores stay super-Earths.
           const recycle = 1 + 10 / (b.a * b.a);
-          const tKH = Math.max(100, 1e9 * Math.pow(mE, -3) * recycle);
+          const tKH = Math.max(100, 1e10 * Math.pow(mE, -3) * recycle);
           const q = mass(b) / M, h = d.H[i] / b.a;
           const K = q * q / Math.pow(h, 5) / d.alpha[i];
           const sGap = d.sigG[i] / (1 + 0.04 * K);
@@ -238,6 +242,11 @@
         if (!Number.isFinite(p)) p = 1;
         p = Math.max(-3, Math.min(4, p));
         const K = q * q / Math.pow(h, 5) / d.alpha[i];
+        // Gas rising outward slows a small planet's drift, or even turns it
+        // (the inner parts of wind-driven disks; Ogihara et al. 2018). But a
+        // giant eating the gas that flows past it drains the disk inside its
+        // own orbit, and that hollow mustn't read as a push outward.
+        if (0.04 * K > 1) p = Math.max(-1, p);
         const G0 = (q / h) * (q / h) * S * Math.pow(b.a, 4) * Om * Om;
         const torque = -d.settings.migration * (1.36 + 0.54 * p) * G0 / (1 + 0.04 * K);
         b.adot = 2 * torque / (mass(b) * b.a * Om);
@@ -335,6 +344,7 @@
       if (r > 200) break;
       let near = false;
       for (const b of sorted) {
+        if (b.kind === 'star') continue;
         const reach = Math.max(0.5 * B_ISO * hill(b, M), 0.6 * (d.re[i + 1] - d.re[i]));
         if (Math.abs(b.a - r) < reach + 0.5 * (d.re[i + 1] - d.re[i])) { near = true; break; }
       }
@@ -361,18 +371,21 @@
 
   // Planets clear the planetesimals near their orbits (the chaotic zone,
   // about 1.3 (m/M)^(2/7) a wide, Wisdom 1980), half onto themselves.
+  // (Not around companion stars: the chaotic-zone width is for bodies much
+  // lighter than the star; Disk.truncate clears where a companion's pull
+  // makes orbits unstable.)
   function clearAround(d, dt) {
     const M = d.mStar;
     for (const b of d.bodies) {
       const m = mass(b);
-      if (m < 0.1 * ME) continue;
+      if (m < 0.1 * ME || b.kind === 'star') continue;
       const w = 1.3 * Math.pow(m / M, 2 / 7) * b.a + 2 * hill(b, M);
       const P = Math.pow(b.a, 1.5) / Math.sqrt(M);
       const f = 1 - Math.exp(-dt / (300 * P));
       for (const [k, frac] of cellsBetween(d, b.a - w, b.a + w)) {
         const r = d.sigPR[k] * f * frac, i = d.sigPI[k] * f * frac;
         d.sigPR[k] -= r; d.sigPI[k] -= i;
-        if (b.kind !== 'star') { b.mRock += 0.5 * r * d.area[k]; b.mIce += 0.5 * i * d.area[k]; d.totals.toPlanets += 0.5 * (r + i) * d.area[k]; }
+        b.mRock += 0.5 * r * d.area[k]; b.mIce += 0.5 * i * d.area[k]; d.totals.toPlanets += 0.5 * (r + i) * d.area[k];
         d.totals.scattered = (d.totals.scattered || 0) + 0.5 * (r + i) * d.area[k];
       }
     }
@@ -398,6 +411,9 @@
     for (let k = 0; k + 1 < list.length; k++) {
       const p = list[k], q = list[k + 1];
       if (!p || !q || p.dead || q.dead) continue;
+      // A companion star's reach isn't a Hill sphere; the binary check below
+      // (Holman & Wiegert 1999) decides which orbits it allows.
+      if (p.kind === 'star' || q.kind === 'star') continue;
       const mp = mass(p), mq = mass(q);
       const inGas = gasOn && d.sigG[cell(p.a)] > 0;
       // Already locked in resonance: in gas, hold the ratio; without it,
@@ -602,7 +618,7 @@
     for (let k = 0; k < NR; k++) {
       if (d.r[k] < rT) continue;
       const f = Math.min(1, (d.r[k] - rT) / rT + 0.5);
-      stripped += (d.sigG[k] + d.sigDR[k] + d.sigDI[k] + d.sigPR[k] + d.sigPI[k]) * f * d.area[k];
+      stripped += (d.sigG[k] + d.sigDR[k] + d.sigDI[k] + d.sigPR[k] + d.sigPI[k] + d.sigV[k]) * f * d.area[k];
       d.sigG[k] *= 1 - f; d.sigDR[k] *= 1 - f; d.sigDI[k] *= 1 - f; d.sigPR[k] *= 1 - f; d.sigPI[k] *= 1 - f; d.sigV[k] *= 1 - f;
     }
     let lost = 0;
@@ -618,6 +634,7 @@
       }
     }
     d.bodies = d.bodies.filter((b) => !b.dead);
+    d.totals.stolen = (d.totals.stolen || 0) + stripped;
     d.events.push({ kind: 'flyby', t: d.age, q, mass: mPass, rT, stripped, lost });
     Disk.fields(d);
   }

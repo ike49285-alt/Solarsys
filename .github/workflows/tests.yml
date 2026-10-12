@@ -1,0 +1,41 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  soak:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build the single-file page
+        run: node tools/build.mjs
+      - name: Quick soak (two clouds to 1 Gyr, every tool, save and restore)
+        run: node tests/soak.js --quick
+
+  page:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright-core@1.56.1 playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Drive the page on a phone-sized screen
+        run: node tests/ui.js index.html dist/shots
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: dist/shots
+          if-no-files-found: ignore

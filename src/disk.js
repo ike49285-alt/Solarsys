@@ -7,11 +7,10 @@
 // under its own gravity and where it is hot enough (above ~900 K) to be
 // magnetically active. Most of its inflow, though, is driven by a magnetised
 // wind that carries angular momentum and some gas away (the wind-driven
-// disk of Tabone et al. 2022, lever arm 3). It drains onto the star at the
-// inner edge, and is
-// boiled off by the star's X-rays (internal photoevaporation, Owen et al.
-// 2012) and by the light of nearby stars. Gas still falling in from the
-// cloud lands where its spin carries it.
+// disk of Tabone et al. 2022, lever arm 5). It drains onto the star at the
+// inner edge, and is boiled off by the star's X-rays (internal
+// photoevaporation, Owen et al. 2012) and by the light of nearby stars. Gas
+// still falling in from the cloud lands where its spin carries it.
 //
 // Dust follows the two-population model of Birnstiel, Klahr & Ercolano
 // (2012): grains grow until they break up in collisions or drift inward
@@ -584,9 +583,13 @@
 
   // A companion star shapes the disk. A wide one truncates it at about a
   // third of its distance (Artymowicz & Lubow 1994): the disk can't spread
-  // past that edge, and gas between there and the companion's orbit falls to
-  // the companion. A close one (circumbinary) clears a cavity about two and a
-  // half times its distance, and gas inside falls onto the pair.
+  // past that edge, and gas between there and a couple of times the
+  // companion's orbit is pulled out of the disk. It doesn't all go to the
+  // companion, though: streams carry a share across to the main star's own
+  // disk, which keeps it fed from the outer disk (Artymowicz & Lubow 1996).
+  // The lighter star takes the larger share (Kelley et al. 2019's fit to
+  // simulations). A close companion (circumbinary) clears a cavity about two
+  // and a half times its distance, and gas inside falls onto the pair.
   function truncate(d, dt) {
     d.wall = NR;
     for (const c of d.companions) {
@@ -604,12 +607,23 @@
         const rt = 0.35 * c.a * (1 - c.e), rOut = Math.min(R_OUT, 2.5 * c.a * (1 + c.e));
         const iw = cellOf(rt) + 1;
         d.wall = Math.min(d.wall, iw);
+        const q = Math.min(1, c.mass / d.mStar);
+        const mine = (0.1 + 0.9 * q) / (1.1 + 0.9 * q);   // the main star's share of the streams
+        let gas = 0, rock = 0, ice = 0, vap = 0;
         for (let i = iw; i < NR && d.r[i] < rOut; i++) {
           const f = 1 - Math.exp(-dt * d.Om[i] / 20);
-          c.mass += (d.sigG[i] + d.sigDR[i] + d.sigDI[i] + d.sigV[i] + d.sigPR[i] + d.sigPI[i]) * f * d.area[i];
+          const A = f * d.area[i];
+          gas += d.sigG[i] * A; rock += d.sigDR[i] * A; ice += d.sigDI[i] * A; vap += d.sigV[i] * A;
+          c.mass += (d.sigPR[i] + d.sigPI[i]) * A;    // planetesimals are stirred up and scattered to it
           d.sigG[i] *= 1 - f; d.sigDR[i] *= 1 - f; d.sigDI[i] *= 1 - f; d.sigV[i] *= 1 - f;
           d.sigPR[i] *= 1 - f; d.sigPI[i] *= 1 - f;
         }
+        c.mass += (gas + rock + ice + vap) * (1 - mine);
+        const k = iw - 1, A = d.area[k];
+        if (k >= 0) {
+          d.sigG[k] += gas * mine / A; d.sigDR[k] += rock * mine / A;
+          d.sigDI[k] += ice * mine / A; d.sigV[k] += vap * mine / A;
+        } else c.mass += (gas + rock + ice + vap) * mine;
       }
     }
   }
@@ -622,7 +636,7 @@
   // that flip back and forth into spurious rings; so no step is longer than
   // a fifth of the shortest viscous (or wind-inflow) time where the gas is.
   function maxDt(d) {
-    let dt = 0.03 * Math.max(d.age, 1e4);
+    let dt = Math.min(0.03 * Math.max(d.age, 1e4), Star.stepLimit(d.mStar, d.age));
     if (d.infall.length) dt = Math.min(dt, Math.max(50, d.infall[0].t - d.t), 2000);
     if (!d.gone) {
       dt = Math.min(dt, 2e5);
@@ -669,22 +683,26 @@
 
   // ---- Fiddling --------------------------------------------------------------------------------------
   // Sweep gas and dust out of the rings between r0 and r1 (a fraction f of it).
+  // Sweep a band clear (the page's tool); returns the gas taken.
   function clear(d, r0, r1, f) {
-    let removed = 0;
+    let gas = 0, all = 0;
     for (let i = 0; i < NR; i++) {
       if (d.r[i] < r0 || d.r[i] > r1) continue;
-      removed += d.sigG[i] * f * d.area[i];
+      gas += d.sigG[i] * f * d.area[i];
+      all += (d.sigG[i] + d.sigDR[i] + d.sigDI[i] + d.sigV[i]) * f * d.area[i];
       d.sigG[i] *= 1 - f; d.sigDR[i] *= 1 - f; d.sigDI[i] *= 1 - f; d.sigV[i] *= 1 - f;
     }
+    d.totals.removed = (d.totals.removed || 0) + all;
     fields(d);
-    return removed;
+    return gas;
   }
   // Add dust (rock and ice in the usual mix) to the rings between r0 and r1,
   // `earths` Earth masses in all.
+  // Scatter dust into a band (the page's tool); returns the mass added.
   function addDust(d, r0, r1, earths) {
     let a = 0;
     for (let i = 0; i < NR; i++) if (d.r[i] >= r0 && d.r[i] <= r1) a += d.area[i];
-    if (a <= 0) return;
+    if (a <= 0) return 0;
     const s = earths * MEARTH / a;
     for (let i = 0; i < NR; i++) {
       if (d.r[i] < r0 || d.r[i] > r1) continue;
@@ -695,10 +713,12 @@
       } else {
         // No gas to hold dust: it goes straight into planetesimals.
         d.sigPR[i] += s * ROCK;
-        if (d.T[i] < T_ICE) d.sigPI[i] += s * (1 - ROCK);
+        // (Warm water just boils away.)
+        if (d.T[i] < T_ICE) d.sigPI[i] += s * (1 - ROCK); else d.totals.dustLost += s * (1 - ROCK) * d.area[i];
       }
     }
     fields(d);
+    return earths * MEARTH;
   }
 
   // ---- Saving ---------------------------------------------------------------------------------------

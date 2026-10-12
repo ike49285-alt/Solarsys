@@ -174,5 +174,26 @@
     return { inner: Math.sqrt(L / 1.1), outer: Math.sqrt(L / 0.36) };
   }
 
-  return { at, zams, mainSequenceLife, contractionTime, whiteDwarfMass, colour, habitableZone, RSUN_AU };
+  // The longest step (years) that still follows the star through its late
+  // phases: they are brief next to its life (a Sun-like star's last giant
+  // phase is a few million years after ten billion), and a longer step would
+  // jump right over the swelling that swallows close planets.
+  function stepLimit(m, age) {
+    if (m < 0.075) return Infinity;
+    const tMain = age - contractionTime(m), tMS = mainSequenceLife(m);
+    if (tMain < 0.97 * tMS) return Infinity;
+    if (tMain < tMS) return 0.005 * tMS;
+    const tPost = tMain - tMS;
+    if (m >= 8) {
+      const life = 0.1 * tMS;
+      return tPost < life ? life / 200 : tPost < life + 1e6 ? 1e4 : Infinity;
+    }
+    const post = 0.16 * tMS * Math.pow(m, 0.3);
+    if (tPost < 0.6 * post) return post / 200;
+    if (tPost < post) return Math.max(3e3, Math.min(post / 2000, post - tPost + 1e4));   // land in the nebula
+    if (tPost - post < 3e4) return 3e3;     // the planetary nebula
+    return Infinity;
+  }
+
+  return { at, zams, mainSequenceLife, contractionTime, whiteDwarfMass, colour, habitableZone, stepLimit, RSUN_AU };
 });

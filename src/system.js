@@ -44,7 +44,7 @@
     if (opts.start === 'disk') {
       w.stage = 'disk';
       w.disk = Disk.synthetic(w.seed, s.disk, { mStar: opts.mStar });
-      w.age = w.disk.age;
+      w.age = clock(w.disk);
       w.handLost = 0;
       w.initialMass = w.disk.mStar + Disk.totals(w.disk).gas + Disk.totals(w.disk).dust + Disk.totals(w.disk).planetesimals
         + w.disk.sigV.reduce((a, v, i) => a + v * w.disk.area[i], 0);
@@ -193,7 +193,7 @@
     w.lastCloud = Cloud.snapshot(c);
     w.cloud = null;
     w.stage = 'disk';
-    w.age = w.disk.age;
+    w.age = clock(w.disk);
     const jets = w.disk.totals.jets || 0;
     note(w, 'disk', `The star has gathered ${fmtMass(w.disk.mStar)}. Around it the gas settles into a spinning disk; more is still raining in${jets > 0.01 ? `, and jets along the star's poles throw ${fmtMass(jets)} back out` : ''}.`);
     diskEvents(w);
@@ -210,13 +210,17 @@
       Planets.evolve(d, dt);
       Disk.step(d, dt);
       done += dt; n++;
-      w.age = d.age;
+      w.age = clock(d);
       diskEvents(w);
       starMilestones(w);
     }
     sample(w);
     return done;
   }
+
+  // The page's clock runs from the start of the collapse; the disk keeps the
+  // star's own age (from its birth), which is what the physics needs.
+  function clock(d) { return d.age + (d.bornAt || 0); }
 
   // The longest single step the disk would take right now (for the clock).
   function nextStep(w) {
@@ -256,7 +260,7 @@
       stage: 'disk', phase: phase(w), age: w.age, starMass: d.mStar, star: d.star,
       luminosity: d.star.lTotal, mdot: d.mdotStar, gas: T.gas, dust: T.dust, planetesimals: T.planetesimals,
       ice: T.ice, infall: T.infall, snowLine: T.snowLine, planetMass, planets: count, hz,
-      diskRadius: Disk.radiusHolding(d, 0.9), gone: d.gone, goneAt: d.goneAt, hole: d.hole,
+      diskRadius: Disk.radiusHolding(d, 0.9), gone: d.gone, goneAt: d.gone ? d.goneAt + (d.bornAt || 0) : d.goneAt, hole: d.hole,
       totals: d.totals,
     };
   }
@@ -308,11 +312,11 @@
     }
     const d = w.disk;
     switch (msg.tool) {
-      case 'planet': Planets.addPlanet(d, msg.a, msg.earths); break;
+      case 'planet': w.initialMass += Planets.mass(Planets.addPlanet(d, msg.a, msg.earths)); break;
       case 'move': Planets.moveBody(d, msg.id, msg.a, msg.e); break;
       case 'remove': Planets.removeBody(d, msg.id); note(w, 'removed', 'You took a body out of the system.'); break;
       case 'clear': { const m = Disk.clear(d, msg.r0, msg.r1, msg.f || 0.9); if (m > 0) note(w, 'clear', `You swept ${fmtMass(m)} of gas out of the disk between ${fmtAU(msg.r0)} and ${fmtAU(msg.r1)}.`); break; }
-      case 'dust': Disk.addDust(d, msg.r0, msg.r1, msg.earths || 5); note(w, 'dust', `You scattered ${fmtEarths((msg.earths || 5) * ME)} of dust between ${fmtAU(msg.r0)} and ${fmtAU(msg.r1)}.`); break;
+      case 'dust': w.initialMass += Disk.addDust(d, msg.r0, msg.r1, msg.earths || 5); note(w, 'dust', `You scattered ${fmtEarths((msg.earths || 5) * ME)} of dust between ${fmtAU(msg.r0)} and ${fmtAU(msg.r1)}.`); break;
       case 'flyby': Planets.flyby(d, msg.q, msg.mass || 0.5); break;
       default: break;
     }
