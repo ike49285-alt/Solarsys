@@ -1,226 +1,140 @@
-# Project notes for Claude — Eldritch Cartographer
+# Working on this repo
 
-This project was a fresh start (see git history before this point for the
-prior project, an accretion-disk N-body sim — unrelated, fully replaced).
-Read this before making changes.
+Solar Nebula: a gas cloud collapses into a star and disk, planets form,
+and the system ages to its end. `README.md` covers what it does for a
+player; this file covers how to work on it.
 
-## What this is
+## Workflow rules from the user
 
-`index.html` is a single self-contained procedural map generator for
-Call of Cthulhu, covering five location types: caves, mansions, crypts,
-graveyards, and villages. No build tooling, no dependencies — it's plain HTML/CSS
-and vanilla JS in one file, opens directly in a browser or serves
-straight off GitHub Pages. There is no separate source file to build
-from; `index.html` **is** the source. Edit it directly.
+- **Publish the artifact before testing.** Whenever something is updated,
+  rebuild and republish the Solar Nebula artifact first. Then run the
+  tests and take screenshots. If fixes were needed, republish.
+- **End every build with the artifact.** Finish by publishing to the same
+  artifact URL and opening it for the user:
+  https://claude.ai/artifact/2av6xgeCZqUp58MpxnKPLT
 
-Full design rationale (grid model, seeding, why caves/crypts get
-depth-shading and mansions/graveyards don't, the "secret rooms" convention)
-is in `README.md` — read that before changing generator behavior, so
-changes stay consistent with the existing visual language rather than
-introducing a second style.
+## Priorities from the user
 
-**Primary target is mobile Safari, phone-in-hand at the table** — not a
-desktop app that also happens to work on mobile. When a design decision
-could go either way, default to what works one-handed on a phone
-screen (touch targets, zoom/pan, layout stacking at 390px) and treat
-desktop as the thing that also has to keep working, not the other way
-around.
+- They want a toy to fiddle with: tools and sliders that visibly change
+  what happens, like their stream-table sim.
+- Realism as far as possible, but stability of operation comes first. A
+  slow but steady simulation beats a fast one that can freeze or crash.
+- It must work well on a phone. Avoid features that don't.
 
-**Core boundary, set deliberately by the project owner: this tool
-generates the map and nothing else.** Terrain, room/building geometry,
-and generic type labels (Study, Ossuary, General Store) are the
-generator's job and stay procedural. Anything that reads as *story* —
-what's actually going on in a room, who a monster is, what it's doing
-there — is a blank field the Keeper fills in by hand (map title,
-per-map Keeper Notes, per-room notes, and the entire threat stat
-block). Do not reintroduce generated flavor text, investigation hooks,
-or named/described monsters — that was tried (village "leads," a
-`MONSTER_POOLS` flavor library) and explicitly reverted. The one
-exception already in place is the atmospheric one-line `flavor` string
-each generator returns (mood-setting, no plot/clues) — leave that as
-is, but don't add anything more specific than that anywhere else.
+## Building the artifact
 
-## Architecture summary
+The artifact is `index.html` with its `<script src>` files inlined and the
+document wrapper removed (the artifact host adds its own). Everything
+between `<!-- page:start -->` and `<!-- page:end -->` is the page.
 
-Everything lives in `index.html`'s one `<script>` block:
+```sh
+node tools/build.mjs /path/to/out.html     # default dist/solar-nebula.html
+```
 
-- **PRNG**: `cyrb53` (string → 32-bit hash) feeding `mulberry32`. Seed
-  string + map type are combined before hashing, so the same seed text
-  produces a different map per type (not the same layout re-skinned).
-- **Grid model**: a flat `Uint8Array` per map, cell types
-  `WALL / FLOOR / DOOR / WATER / PATH`. Helpers: `idx`, `inBounds`,
-  `bfsDistance` (multi-source BFS, used for cave/crypt depth shading),
-  `findRegions` (flood fill, used to detect and reconnect isolated cave
-  pockets), `carveLine` (biased random walk between two points, used for
-  tunnel-connecting regions).
-- **Five generators**, each a standalone function returning
-  `{ cols, rows, grid, features, rooms, mapType, title, flavor, key }`:
-  `generateCave`, `generateMansion`, `generateCrypt`, `generateGraveyard`,
-  `generateVillage`. `features` is an array of `{ type, x, y, ... }`
-  glyphs drawn on top of the grid (headstones, sarcophagi, furniture,
-  a village well, etc.) — see `drawFeature` for the full switch of
-  supported types. `rooms` is only populated by mansion/crypt/graveyard/
-  village (named rooms/chambers/buildings, some flagged `secret`).
-  `ROOM_HEADINGS` maps mapType to that section's sidebar heading text
-  ("Village Locations" vs. "Rooms & Chambers" elsewhere) — add an entry
-  there for any new map type that populates `rooms`.
-- **Keeper Notes**: every room/chamber/building gets a blank `.room-notes`
-  textarea in the sidebar (bound live to `room.notes`, no generated
-  content); the map as a whole gets a `#mapNotes` textarea (`currentMap.
-  notes`) and an editable title (`#mapTitleInput`, `currentMap.title`,
-  defaults to the generator's title but is renameable). All of it is
-  reset to blank/default in `regenerate()` — notes belong to one
-  generated layout, not across regenerations, *unless* the Keeper saves
-  that layout first (see Saved locations below).
-- **Shared surname pool**: `SURNAME_POOL` (top-level, near `carveLine`)
-  is used by both `generateGraveyard` (mausolea) and `generateVillage`
-  (family residences, and the "no one will say why the ___ place has
-  stood empty" flavor line) so the same families recur across a seed's
-  worth of map types instead of each generator inventing its own cast.
-- **Renderer**: `renderMap` draws terrain fill → ink boundary outline
-  (drawn once, only on edges between non-wall and wall, so it works for
-  every map type without per-type special-casing) → door glyphs →
-  features → frame/compass. `PALETTES` holds per-map-type colors.
-- **Lurking threats**: `#addThreatBtn` arms `placingThreat`; clicking the
-  canvas then calls `blankThreat(x, y)` — every field empty, nothing
-  pre-filled — and pushes it onto `placedThreats`. Each entry renders as
-  a `.threat-card` (`buildThreatCard`) with real CoC 7e characteristic
-  inputs (`STAT_FIELDS`/`STAT_LABELS`: STR/CON/SIZ/DEX/APP/INT/POW/EDU)
-  plus Move/Armor/Attacks/Skills/Sanity Loss/Notes. `computeDerived` +
-  `dbBuildFromStrSiz` recompute HP/MP/Damage Bonus/Build live from
-  whatever the Keeper types, using the 7e core-rulebook formulas — that
-  math is the only "system knowledge" this tool encodes; no specific
-  creature's stats are ever stored or suggested. `drawThreatMarker`
-  draws each placement as a numbered overlay *after* `renderMap` returns
-  (see `redraw()`), gated by `#showThreatsToggle`, so markers are never
-  part of the generator's own grid/features output.
-- **Saved threats**: `savedThreats` (an object keyed by Keeper-chosen
-  name) is persisted to `localStorage` under `SAVED_THREATS_KEY` via
-  `loadSavedThreats()`/`persistSavedThreats()` — a reusable library (a
-  "Deep One Hybrid" stat block the Keeper doesn't want to retype per
-  map), not something tied to one generated layout. The 💾
-  button on a `.threat-card` (`saveThreatAsTemplate`) writes the
-  current card's stats/fields in; `#savedThreatSelect` (repopulated by
-  `populateSavedThreatSelect`) picks what a *newly placed* marker starts
-  from (`threatFromTemplate`, called from the canvas click handler) —
-  it's a starting point, not a live link, so editing a placed marker
-  never mutates the saved template or other markers placed from it.
-- **Saved locations**: `savedLocations` (keyed by Keeper-chosen name),
-  `SAVED_LOCATIONS_KEY`, `loadSavedLocations()`/`persistSavedLocations()`
-  — same pattern as saved threats, but stores a **full snapshot** of a
-  whole prepped map (`saveCurrentLocation()`: grid as a plain array —
-  `Array.from(currentMap.grid)`, since `Uint8Array` isn't directly
-  JSON-safe — plus features/rooms-with-notes/key/flavor/title/notes and
-  a clone of `placedThreats`), not a seed to regenerate later. Don't
-  "optimize" this into seed+type+size replay: the generators will keep
-  changing, and replaying an old seed after a future generator change
-  could silently produce different geometry, desyncing room notes
-  (matched by array index) and threat marker positions from a save that
-  looked fine when it was made. `loadLocation()` rehydrates `currentMap`
-  directly from the snapshot (`Uint8Array.from(...)` back from the plain
-  array) — it never calls a `generateX()` function. `hasUnsavedContent()`
-  / `confirmDiscardIfNeeded()` gate the top of `regenerate()` so
-  Generate/type-switch/size-change/🎲 ask before silently discarding
-  notes or threats that aren't saved as a Location yet.
-- **Map viewer (zoom/pan)**: `view = { scale, x, y }` drives a CSS
-  `translate()+scale()` transform on the canvas element — the canvas
-  bitmap itself is never redrawn for this. `fitView()` sizes/centers it
-  to the current `.canvas-wrap` on load, on `regenerate()`, and on
-  window `resize` (covers phone rotation). Touch pinch/pan, wheel-zoom,
-  and mouse-drag-pan all just mutate `view` and call `applyView()`.
-  `cellFromEvent` keeps working unchanged at any zoom because
-  `getBoundingClientRect()` already reports the transformed box — don't
-  reintroduce a separate coordinate-conversion path for zoomed state.
-  `.canvas-wrap` uses `position: relative` + the canvas
-  `position: absolute; top:0; left:0` (not flexbox centering) so the
-  canvas's untransformed origin is deterministic and matches what
-  `fitView()`'s math assumes — flexbox centering here was a real bug
-  once (double-offset against the transform math), so don't bring it
-  back for "simplicity."
-- **App wiring** at the bottom: DOM lookups, `regenerate()`,
-  `updateSidebar()`, event listeners, `init()` IIFE that runs on load.
+## Layout
 
-## Workflow rules
+- `src/cloud.js`: the collapse, using SPH with a Barnes–Hut tree, block
+  time steps and sink particles. Code units have G = 1 and a cloud of
+  mass 1 and radius 1; `units` converts them. It hands off to the disk
+  0.6 time units (~4.5 kyr) after the first protostar forms (`SETTLE`).
+- `src/disk.js`: the 1D disk (gas, two-population dust, vapour,
+  planetesimals) on 240 log-spaced rings, solved implicitly.
+- `src/planets.js`: orbit-averaged planets (growth, migration,
+  resonances, instabilities, flybys, the star's late effects).
+- `src/star.js`: stellar evolution fits.
+- `src/system.js`: one world, holding the stages, tools, log, readings
+  and save/restore.
+- `src/engine.js`: runs a world in a Web Worker built from the modules'
+  factory functions, falling back to the page if workers are unavailable.
+  Work runs in 14 ms slices, frames go out at most every 33 ms, and any
+  error pauses the world instead of losing it. Skip is a fast-forward of
+  back-to-back slices that keeps sending frames. Never block the worker
+  for long.
+- **The clock's pace** is set in `engine.js` (`CLOUD_RATE`, `LOG_RATE`
+  per stage, `STAR_STEPS`). At ×1 the user wanted a whole system to take
+  longer than ten minutes, so it now takes about half an hour, most of
+  it in the disk and planet-forming stages. Check with
+  `node tools/pace.js [seed]` after changing it. A collapse step can't be
+  split, and early on one covers 75 years. So the engine takes a step only
+  once the clock owes it, carrying any overshoot, and the view glides
+  particles along their velocities in between. Forcing a step every slice
+  made the early collapse run about 17 times too fast.
+- `src/render.js`: canvas drawing. The disk is a smooth radial-gradient
+  glow from the rings' surface density, so gaps and pebble traps show,
+  with drifting particles on top.
+- `src/app.js`: the page wiring. It runs no physics and talks to the
+  engine only by messages.
 
-**1. This is a plain-JS single-file project — no build step exists or
-should be added.** If a future change genuinely needs a build (e.g.
-switching to a framework), that's a bigger conversation to have with the
-user first, not something to introduce unilaterally.
+Every module is wrapped so it works as a classic script, inside the
+worker blob (via the factory's `toString()`), and in Node (`require`).
+Keep that wrapper, and keep the modules free of DOM code except render
+and app.
 
-**2. Verify empirically, not by reading the code.** Procedural
-generation is exactly the kind of code where "looks right" and "is
-right" diverge — a generator can run with zero errors and still produce
-disconnected caves, overlapping rooms, or off-by-one grid bugs that only
-show up visually or after many seeds. Pattern used to build this
-project, worth reusing for changes:
-- Extract the `<script>` contents and run `node --check` on them first
-  for a fast syntax pass.
-- Render with headless Chromium via `playwright-core`
-  (`/opt/node22/lib/node_modules/playwright/node_modules/playwright-core`),
-  launched with `executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'`,
-  `args: ['--no-sandbox']` — do NOT run `playwright install`.
-- Click through all five map types, and re-generate several times per
-  type (different seeds) — single-seed testing will miss generator bugs
-  that only occur for some random layouts (e.g. a BSP split that
-  produces a degenerate 0-width room, a crypt spine that walks off the
-  grid edge, a village's rejection-sampled buildings landing far short
-  of the target count on an unlucky seed).
-- Check both `page.on('pageerror')` and `page.on('console')` for errors,
-  and pull real pixel data via `getImageData` (or at minimum a
-  screenshot you actually look at) rather than assuming "canvas.width is
-  nonzero" means the map rendered correctly.
-- Test the Small/Medium/Large size switch and a narrow mobile viewport
-  (390px) — the header control row uses `flexWrap` for this; don't
-  remove it.
+## Tests
 
-**3. Keep the five generators visually distinct on purpose.** Caves and
-crypts are "carved out of a solid mass" (depth-shaded rock/earth,
-organic or winding shapes). Mansions, graveyards, and villages are
-"built" (thin single-cell walls/fences, flat colors, rectilinear). Don't
-homogenize these without a reason — the contrast is what makes each map
-type read correctly at a glance. Within the "built" group, keep each
-type's own identity too — village isn't just a graveyard with more
-buildings: it has no perimeter wall (open, not enclosed), a browner/
-woodier palette than graveyard's greens, and roads instead of gravel
-paths radiating from a gate.
+- `node tests/soak.js --quick` after any change to the simulation (about
+  a minute); the full `node tests/soak.js` before committing big ones.
+  It fails on errors, NaNs, slow steps, a mass budget that doesn't close
+  within 2%, or a save that doesn't restore exactly. GitHub Actions runs
+  the quick soak and a build on every push.
+- `node tests/ui.js [page] [shots-dir]` drives the page in headless
+  Chromium at phone size. It uses every tool and view, skips through the
+  stages, and checks that a reload picks the world back up. It also
+  saves screenshots; look at them.
 
-**4. Rooms/chambers/buildings with `secret: true` must stay visually
-indistinguishable on the canvas itself** — same wall/door rendering as
-any other room. The only place a secret room is revealed is the sidebar
-room list (marked with `†`), which is meant for the Keeper's eyes, not
-the players'. If you add new secret-room types, follow this convention.
+## Things that are easy to break
 
-Lurking threats work differently on purpose: unlike secret rooms, a
-placed threat *is* drawn as its own marker (`drawThreatMarker`) — that's
-the point, the Keeper is placing it deliberately, not the generator
-hiding it. What keeps this from spoiling a player-facing map is the
-`#showThreatsToggle`: markers must stay a separate overlay pass drawn
-*after* `renderMap`/`redraw()`, never baked into the generator's own
-`features`/`grid` output, so hiding them is always just "redraw without
-the overlay," not "regenerate a different map." Never pre-fill a
-threat's name, stats, or flavor text — `blankThreat()` must stay
-genuinely blank. It's fine (encouraged, even) to compute *derived*
-values from what the Keeper enters (HP/MP/DB/Build), since that's
-official 7e mechanics, not creative content — but don't add a table of
-named creatures or descriptive flavor back in.
+- **Exact restore.** Every array the disk evolves must be saved,
+  including `gap` and `trap`. `Disk.restore` calls `fields(d, true)` so
+  temperature and alpha aren't recomputed from a different starting
+  point. If a save drifts, the soak test says so.
+- **The mass budget.** Anything that removes mass must add it to a
+  `totals` bucket (`Planets.lose`, wind, jets, photoevaporation, the
+  sweep and flyby tools). Tools that add mass (planet, dust, and gas in
+  the cloud) raise the starting mass instead. `System.budget` adds it
+  all up, and the soak test checks it with every tool in use.
+- **Companion stars are bodies too** (`kind: 'star'`, in `d.bodies` as
+  well as `d.companions`). Rules made for planets must skip them,
+  because Hill spheres, chaotic zones and embryo spacing are only valid
+  for bodies much lighter than the star. Treating a companion as a
+  planet once wiped out every binary's inner disk. What a companion
+  allows is `Disk.truncate` (the disk's edge and the streams across the
+  gap) plus the Holman–Wiegert check in `encounters`.
+- **The star's late phases are brief.** `Star.stepLimit` keeps steps
+  short enough not to jump over the red-giant tip, the asymptotic giant
+  branch and the planetary nebula. Keep it in `Disk.maxDt`.
+- **Worlds don't end.** The user didn't want the star's death to force a
+  new world. Time goes on through the remnant era: `LOG_RATE.remnant`
+  runs it quicker, and `LATE_CAP` stops it speeding up past a black
+  dwarf's age. Gas poured in later (`Disk.addGas`) revives the disk with
+  its own clock (`rebornAt`, `System.newDiskAge`), paced like a young
+  one. `MAX_AGE` only keeps the numbers finite.
+- **The star's mass.** `d.mStar` is the mass the star was built from,
+  which is its stellar track. `Disk.starMass(d)` is what it weighs now,
+  after shedding mass late in life. Orbits, gaps and readings use the
+  latter.
+- **The clock.** The page's age runs from the start of the collapse. The
+  disk keeps the star's own age in `d.age`, which the physics needs, and
+  the star's birth time in `d.bornAt`; `clock()` in system.js adds
+  them.
+- **Calibration.** The defaults were tuned together so that:
+  - a 1.5 M☉, 31 K, spin 0.02 cloud makes a star of about 1 M☉;
+  - the gas lasts about 1.5–2 Myr;
+  - giants form in some systems, not all;
+  - inner systems hold rocky planets, super-Earths and ocean worlds.
 
-**Focus-management gotcha**: after placing a marker, the click handler
-focuses the new card's name input for immediate typing. This must use
-`focus({ preventScroll: true })` — a plain `.focus()` scrolls the
-sidebar entry into view, which shifts the canvas's on-screen position
-and throws off the *next* click's coordinates (a real bug, not just a
-test artifact — found via headless-browser testing, not by reading the
-code). Any future auto-focus added to this page should do the same.
+  The main knobs are:
+  - disk: α 1e-3, wind 1e-2 with lever arm 5, migration at 30% of
+    Tanaka;
+  - collapse: magnetic braking and jets;
+  - growth: envelope recycling near the star, and dry grains 80% as
+    tough as icy ones;
+  - envelope contraction: 10¹⁰ (M/M⊕)⁻³ yr. With 10⁹, nearly every
+    single star grew a giant.
+  - For gap-opening planets only, the slope the Type I torque sees is
+    held at ≥ −1, so a giant that drains the disk inside its orbit isn't
+    pushed outward. Small planets keep the real slope, since wind-driven
+    disks can slow them that way.
 
-## Known intentional loose ends
-
-- Furniture/feature glyphs are simple vector shapes (rectangles, lines,
-  arcs) rather than icons or images, to keep the file dependency-free
-  and self-contained. Keep new glyphs in that style rather than reaching
-  for an icon font or external asset.
-- The "disturbed grave" feature in graveyards is a flavor/plot hook, not
-  a mechanically meaningful map element — it's fine for it to appear or
-  not per-seed.
-- GitHub Pages status for this repo has not been independently confirmed
-  by any Claude session yet — check repo Settings → Pages, or ask the
-  user, before claiming a live URL exists.
+  Check a change against several seeds (`--seeds`), not one. Giants
+  should turn up around a quarter of single Sun-like stars.

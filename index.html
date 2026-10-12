@@ -1,2098 +1,356 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Eldritch Cartographer</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- page:start -->
+<title>Solar Nebula</title>
+<meta name="description" content="A cloud of gas collapses into a star and a disk, and planets form in it. Poke it while it happens.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Saira+Condensed:wght@500;600;700&display=swap">
 <style>
-  :root{
-    --bg: #0a0906;
-    --panel: #14120d;
-    --panel-border: #2b2419;
-    --text: #d9cfb8;
-    --text-dim: #8f8570;
-    --accent: #7c1f1f;
-    --accent-bright: #a53434;
-    --ink: #201a10;
-  }
-  * { box-sizing: border-box; }
-  html, body {
-    margin: 0; padding: 0;
-    background: var(--bg);
-    color: var(--text);
-    font-family: Georgia, 'Times New Roman', serif;
-    min-height: 100%;
-  }
-  #app {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-  }
-  header {
-    padding: 1rem 1.25rem 0.75rem;
-    border-bottom: 1px solid var(--panel-border);
-    background: linear-gradient(180deg, #120f0a, #0a0906);
-  }
-  h1 {
-    margin: 0 0 0.15rem;
-    font-size: 1.6rem;
-    letter-spacing: 0.04em;
-    color: #e7dcc0;
-    text-shadow: 0 0 12px rgba(124,31,31,0.35);
-  }
-  .subtitle {
-    margin: 0 0 0.9rem;
-    font-style: italic;
-    color: var(--text-dim);
-    font-size: 0.92rem;
-  }
-  .controls {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.6rem;
-    align-items: center;
-  }
-  .type-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-  }
-  button, select, input[type="text"], input[type="number"], textarea {
-    font-family: inherit;
-    font-size: 0.85rem;
-    color: var(--text);
-    background: var(--panel);
-    border: 1px solid var(--panel-border);
-    border-radius: 3px;
-    padding: 0.5rem 0.8rem;
-    cursor: pointer;
-  }
-  input[type="text"], input[type="number"], textarea { cursor: text; }
-  input[type="text"] { min-width: 10rem; }
-  textarea { font-family: inherit; resize: vertical; width: 100%; cursor: text; }
-  select { cursor: pointer; }
-  button.type-btn.active, button.toggle-btn.active {
-    background: var(--accent);
-    border-color: var(--accent-bright);
-    color: #fdf3e2;
-  }
-  button:hover { border-color: var(--accent-bright); }
-  button.primary {
-    background: var(--accent);
-    border-color: var(--accent-bright);
-    color: #fdf3e2;
-    font-weight: bold;
-  }
-  button.primary:hover { background: var(--accent-bright); }
-  .seed-group { display: flex; gap: 0.35rem; align-items: center; }
-  main {
-    flex: 1;
-    display: grid;
-    grid-template-columns: 1fr 320px;
-    gap: 1rem;
-    padding: 1rem 1.25rem;
-    align-items: start;
-  }
-  .canvas-wrap {
-    background: #050403;
-    border: 1px solid var(--panel-border);
-    border-radius: 4px;
-    overflow: hidden;
-    position: relative;
-    min-height: 60vh;
-    touch-action: none;
-    cursor: grab;
-  }
-  .canvas-wrap.grabbing { cursor: grabbing; }
-  canvas {
-    display: block;
-    image-rendering: crisp-edges;
-    position: absolute;
-    top: 0;
-    left: 0;
-    transform-origin: 0 0;
-  }
-  aside {
-    background: var(--panel);
-    border: 1px solid var(--panel-border);
-    border-radius: 4px;
-    padding: 1rem;
-    position: sticky;
-    top: 1rem;
-  }
-  aside h2 { margin: 0 0 0.25rem; }
-  .title-input {
-    display: block;
-    width: 100%;
-    margin: 0 0 0.25rem;
-    padding: 0.1rem 0;
-    font-size: 1.15rem;
-    font-family: inherit;
-    font-weight: bold;
-    color: #e7dcc0;
-    background: transparent;
-    border: none;
-    border-bottom: 1px solid transparent;
-    cursor: text;
-  }
-  .title-input:hover, .title-input:focus {
-    border-bottom-color: var(--panel-border);
-    outline: none;
-  }
-  .flavor {
-    font-style: italic;
-    color: var(--text-dim);
-    font-size: 0.88rem;
-    margin: 0 0 0.9rem;
-    line-height: 1.4;
-    border-left: 2px solid var(--accent);
-    padding-left: 0.6rem;
-  }
-  .notes-area {
-    display: block;
-    font-size: 0.85rem;
-    line-height: 1.4;
-    min-height: 4.5rem;
-    margin: 0 0 0.9rem;
-  }
-  .notes-area::placeholder { color: var(--text-dim); font-style: italic; }
-  aside h3 {
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--text-dim);
-    margin: 1rem 0 0.4rem;
-    border-top: 1px solid var(--panel-border);
-    padding-top: 0.7rem;
-  }
-  aside > h3:first-child { border-top: none; margin-top: 0; padding-top: 0; }
-  .saved-location-row { display: flex; gap: 0.35rem; align-items: center; margin-bottom: 0.5rem; }
-  .saved-location-row select { flex: 1; min-width: 0; }
-  #saveLocationBtn { width: 100%; margin-bottom: 0.4rem; }
-  ul.key-list, ul.room-list { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
-  ul.key-list li, ul.room-list li {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin: 0.3rem 0;
-  }
-  .swatch {
-    width: 0.9rem; height: 0.9rem;
-    border-radius: 2px;
-    border: 1px solid rgba(0,0,0,0.4);
-    flex: none;
-  }
-  ul.room-list li { align-items: flex-start; }
-  ul.room-list li.secret { color: var(--accent-bright); font-style: italic; }
-  ul.room-list li::before { content: "•"; color: var(--text-dim); margin-top: 0.4rem; }
-  ul.room-list li.secret::before { content: "†"; color: var(--accent-bright); }
-  .room-entry { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 0; }
-  .room-notes {
-    font-size: 0.8rem;
-    min-height: 2.6rem;
-    font-style: normal;
-  }
-  .room-notes::placeholder { color: var(--text-dim); font-style: italic; }
-  .threat-hint {
-    font-size: 0.8rem;
-    font-style: italic;
-    color: var(--text-dim);
-    margin: 0 0 0.5rem;
-  }
-  ul.threat-list { display: flex; flex-direction: column; gap: 0.6rem; }
-  ul.threat-list li { display: block; margin: 0; }
-  ul.threat-list li.empty { color: var(--text-dim); font-style: italic; padding-left: 1rem; }
-  ul.threat-list li.empty::before { content: "•"; color: var(--text-dim); margin-right: 0.5rem; }
-  .threat-card {
-    border: 1px solid var(--panel-border);
-    border-radius: 4px;
-    padding: 0.6rem;
-    background: rgba(0,0,0,0.15);
-  }
-  .threat-card-head {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin-bottom: 0.5rem;
-  }
-  .threat-number {
-    flex: none;
-    width: 1.4rem;
-    height: 1.4rem;
-    border-radius: 50%;
-    background: var(--accent);
-    color: #fdf3e2;
-    font-size: 0.72rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .threat-name {
-    flex: 1;
-    min-width: 0;
-    font-weight: bold;
-  }
-  .threat-icon-btn {
-    flex: none;
-    background: transparent;
-    border: 1px solid var(--panel-border);
-    color: var(--text-dim);
-    border-radius: 3px;
-    font-size: 0.72rem;
-    padding: 0.1rem 0.45rem;
-    cursor: pointer;
-  }
-  .threat-icon-btn:hover { border-color: var(--accent-bright); color: var(--accent-bright); }
-  .stat-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0.35rem;
-    margin-bottom: 0.5rem;
-  }
-  .stat-field { display: flex; flex-direction: column; gap: 0.15rem; }
-  .stat-field span {
-    font-size: 0.66rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-dim);
-  }
-  .stat-field input {
-    width: 100%;
-    padding: 0.25rem 0.3rem;
-    font-size: 0.82rem;
-    text-align: center;
-  }
-  .derived-row {
-    font-size: 0.78rem;
-    color: var(--text-dim);
-    font-variant-numeric: tabular-nums;
-    margin-bottom: 0.5rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--panel-border);
-  }
-  .derived-row strong { color: var(--text); }
-  .field-row { display: flex; flex-direction: column; gap: 0.15rem; margin-bottom: 0.4rem; font-size: 0.78rem; color: var(--text-dim); }
-  .field-row:last-child { margin-bottom: 0; }
-  .field-row input, .field-row textarea { font-size: 0.8rem; padding: 0.3rem 0.5rem; color: var(--text); }
-  .field-row textarea { min-height: 2.2rem; }
-  .toggle-group {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.85rem;
-    color: var(--text-dim);
-  }
-  .toggle-group input { cursor: pointer; }
-  footer {
-    padding: 0.6rem 1.25rem;
-    font-size: 0.78rem;
-    color: var(--text-dim);
-    border-top: 1px solid var(--panel-border);
-  }
-  @media (max-width: 900px) {
-    main { grid-template-columns: 1fr; }
-    aside { position: static; }
-  }
+/* Layout: an observatory monitor. The sky leads (full width on a phone),
+   with instrument rails either side of it; the readings sit below it on a
+   phone and beside it on a desk; time runs along the bottom. One dark
+   world on purpose: it's a view of space. */
+:root {
+  --sky: #04050b;
+  --panel: #0b0e1a;
+  --raised: #131830;
+  --raised-hi: #1b2140;
+  --ink: #e7e9f3;
+  --muted: #8f95b0;
+  --faint: #5a6080;
+  --line: #232944;
+  --halpha: #ff5d73;
+  --halpha-soft: rgba(255, 93, 115, 0.16);
+  --star: #ffd48a;
+  --ice: #8fd0ff;
+  --rock: #d4a77c;
+  --life: #7fe0a8;
+  --gas: #ff8fa3;
+  --dust: #ffc46b;
+  --plts: #a9b2cc;
+  --warn: #ffb070;
+  --font-display: "Saira Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --bar-h: 78px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--sky);
+  color: var(--ink);
+  font: 400 15px/1.45 var(--font-body);
+  -webkit-text-size-adjust: 100%;
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--halpha); outline-offset: 2px; }
+
+.app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding-inline: 16px;
+  padding-block: 10px calc(var(--bar-h) + 24px + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  gap: 12px;
+}
+
+/* ---- Header ---- */
+.top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.top h1 {
+  margin: 0; font: 700 26px/1 var(--font-display); letter-spacing: 0.02em; text-transform: uppercase;
+}
+.top h1 .sub { color: var(--muted); font-weight: 500; letter-spacing: 0.06em; font-size: 15px; margin-left: 8px; }
+.clock { display: flex; align-items: baseline; gap: 10px; font-family: var(--font-data); }
+.clock .age { font-size: 20px; font-weight: 500; color: var(--star); font-variant-numeric: tabular-nums; }
+.clock .phase { font: 600 13px/1 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--halpha); }
+
+/* ---- Main layout ---- */
+.layout { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+@media (min-width: 980px) {
+  .layout { grid-template-columns: minmax(0, 1fr) 380px; }
+}
+.view-col { display: grid; gap: 10px; min-width: 0; }
+
+.view-frame { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; gap: 6px; align-items: stretch; }
+.sky {
+  position: relative; margin: 0; min-width: 0;
+  aspect-ratio: 1 / 1; max-height: 74vh; width: 100%; max-width: 100%;
+  border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 45%, #0a0c1c 0%, var(--sky) 70%);
+  touch-action: none;
+}
+@media (min-width: 980px) { .sky { aspect-ratio: 4 / 3; } }
+.sky canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.sky-note {
+  position: absolute; left: 10px; right: 10px; bottom: 8px; pointer-events: none;
+  font: 400 12px/1.3 var(--font-data); color: var(--muted); text-align: center;
+}
+.scale { position: absolute; left: 10px; top: 8px; pointer-events: none; font: 400 11px/1 var(--font-data); color: var(--muted); display: grid; gap: 4px; }
+.scale .bar { height: 2px; background: var(--muted); width: 60px; }
+
+.rail { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rail button {
+  width: 48px; min-height: 48px; padding: 4px 0 3px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--raised); color: var(--ink); display: grid; place-items: center; gap: 1px;
+  font: 600 10px/1 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase;
+}
+.rail button svg { width: 20px; height: 20px; }
+.rail button:hover { background: var(--raised-hi); }
+.rail button[aria-pressed="true"] { background: var(--halpha-soft); border-color: var(--halpha); color: #fff; }
+.rail .group-label { font: 600 10px/1 var(--font-display); letter-spacing: 0.12em; color: var(--faint); text-transform: uppercase; text-align: center; padding-top: 4px; }
+.rail .zoom button { min-height: 38px; font-size: 18px; font-family: var(--font-body); font-weight: 700; }
+.rail .zoom { display: grid; gap: 6px; }
+.rail .sw { width: 22px; height: 6px; border-radius: 3px; display: block; }
+
+/* ---- Stage timeline ---- */
+.stages { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; }
+.stages li {
+  font: 600 10.5px/1.1 var(--font-display); letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint);
+  padding: 6px 2px 5px; text-align: center; border-top: 3px solid var(--line); min-width: 0; overflow-wrap: anywhere;
+}
+.stages li.done { color: var(--muted); border-top-color: #4a3140; }
+.stages li.now { color: var(--ink); border-top-color: var(--halpha); }
+
+/* ---- Tool options, inspector ---- */
+.tool-options, .inspect, .alert {
+  border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 10px 12px; display: grid; gap: 8px;
+}
+.tool-hint { margin: 0; color: var(--ink); }
+.tool-hint b { font: 600 13px/1 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--halpha); margin-right: 6px; }
+.choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.choices button {
+  border: 1px solid var(--line); background: var(--raised); border-radius: 999px; padding: 6px 12px; font-size: 13px;
+}
+.choices button[aria-pressed="true"] { border-color: var(--halpha); background: var(--halpha-soft); }
+.inspect-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.inspect-head b { font: 600 18px/1.1 var(--font-display); letter-spacing: 0.04em; }
+.inspect-head .close, .alert .close { border: 0; background: none; color: var(--muted); font-size: 22px; line-height: 1; padding: 0 4px; }
+.alert { border-color: var(--warn); }
+.alert p { margin: 0; }
+.alert .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.alert .actions button { border: 1px solid var(--line); background: var(--raised); border-radius: 6px; padding: 6px 12px; }
+
+/* ---- Readings panel ---- */
+.panel { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); min-width: 0; }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--line); }
+.tabs button {
+  border: 0; background: none; padding: 11px 6px 9px; font: 600 13px/1 var(--font-display); letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); border-bottom: 2px solid transparent;
+}
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--halpha); }
+.pane { padding: 12px; display: grid; gap: 14px; min-width: 0; }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin: 0; }
+.stats div { min-width: 0; }
+.stats dt { font: 600 11px/1.2 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.stats dd { margin: 2px 0 0; font: 500 14px/1.3 var(--font-data); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.section-title { margin: 0; font: 600 12px/1 var(--font-display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+
+.bodies { width: 100%; border-collapse: collapse; font: 400 12.5px/1.3 var(--font-data); font-variant-numeric: tabular-nums; }
+.bodies-wrap { overflow-x: auto; }
+.bodies th { text-align: left; font: 600 10.5px/1 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.bodies td { padding: 5px 6px; border-bottom: 1px solid #161a30; white-space: nowrap; }
+.bodies tr { cursor: pointer; }
+.bodies tr:hover td, .bodies tr.sel td { background: #151a33; }
+.bodies .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.bodies .num { text-align: right; }
+.empty { color: var(--muted); margin: 0; font-size: 13px; }
+
+.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 300px; overflow-y: auto; }
+.log li { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; font-size: 13.5px; }
+.log time { font: 500 11.5px/1.5 var(--font-data); color: var(--star); font-variant-numeric: tabular-nums; }
+.log li.new { animation: fresh 1.2s ease-out; }
+@keyframes fresh { from { background: var(--halpha-soft); } to { background: transparent; } }
+
+.spark { display: grid; gap: 4px; }
+.spark figcaption { display: flex; justify-content: space-between; font: 600 11px/1 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.spark figcaption .val { font: 500 12px/1 var(--font-data); color: var(--ink); text-transform: none; letter-spacing: 0; }
+.spark canvas { width: 100%; height: 46px; display: block; }
+figure { margin: 0; }
+
+.chart canvas { width: 100%; height: 280px; display: block; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; font: 400 12px/1 var(--font-data); color: var(--muted); }
+.legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
+.note { margin: 0; color: var(--muted); font-size: 13px; max-width: 65ch; }
+
+.sliders { display: grid; gap: 10px; }
+.slider { display: grid; grid-template-columns: 112px minmax(0, 1fr) 76px; align-items: center; gap: 8px; }
+.slider span { font: 600 12px/1.1 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.slider output { font: 500 12px/1 var(--font-data); text-align: right; font-variant-numeric: tabular-nums; }
+.slider input { width: 100%; accent-color: var(--halpha); }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.seg button { border: 1px solid var(--line); background: var(--raised); border-radius: 6px; padding: 6px 4px; font-size: 12.5px; }
+.seg button[aria-pressed="true"] { border-color: var(--halpha); background: var(--halpha-soft); }
+.new-world { display: grid; gap: 8px; }
+.seed-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.seed-row label { font: 600 12px/1 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.seed-row input { min-width: 0; border: 1px solid var(--line); background: var(--sky); border-radius: 6px; padding: 7px 9px; font-family: var(--font-data); font-size: 13px; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { border: 1px solid var(--line); background: var(--raised); border-radius: 6px; padding: 8px 14px; font-weight: 700; }
+.btn.primary { background: var(--halpha); border-color: var(--halpha); color: #1a0509; }
+.save-status { margin: 0; font: 400 12px/1.3 var(--font-data); color: var(--faint); }
+
+/* ---- Time bar ---- */
+.timebar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  background: rgba(8, 10, 20, 0.97); border-top: 1px solid var(--line);
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+}
+.timebar .inner { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.play { width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--halpha); background: var(--halpha-soft); display: grid; place-items: center; }
+.play svg { width: 18px; height: 18px; fill: var(--ink); }
+.play .i-play { display: none; }
+.play[data-paused="true"] .i-play { display: block; }
+.play[data-paused="true"] .i-pause { display: none; }
+.speed { display: grid; gap: 3px; min-width: 0; }
+.speed-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.speed-row span { font: 600 11px/1 var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.speed-row output { font: 500 12px/1 var(--font-data); color: var(--ink); min-width: 42px; text-align: right; }
+.speed input { width: 100%; accent-color: var(--halpha); }
+.rate { font: 400 11.5px/1.2 var(--font-data); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.skip { border: 1px solid var(--line); background: var(--raised); border-radius: 6px; padding: 9px 12px; font: 600 12px/1 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; }
+.skip[aria-pressed="true"] { border-color: var(--halpha); background: var(--halpha-soft); }
+
+@media (max-width: 560px) {
+  .stages { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 2px; }
+}
+@media (max-width: 420px) {
+  .view-frame { grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 4px; }
+  .rail button { width: 44px; min-height: 44px; font-size: 9.5px; }
+  .slider { grid-template-columns: 96px minmax(0, 1fr) 68px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .log li.new { animation: none; }
+}
 </style>
-</head>
-<body>
-<div id="app">
-  <header>
-    <h1>Eldritch Cartographer</h1>
-    <p class="subtitle">Procedural handout maps for Call of Cthulhu keepers — caves, mansions, crypts, graveyards, and villages.</p>
-    <div class="controls">
-      <div class="type-group" id="typeGroup">
-        <button class="type-btn" data-type="cave">Cave</button>
-        <button class="type-btn" data-type="mansion">Mansion</button>
-        <button class="type-btn" data-type="crypt">Crypt</button>
-        <button class="type-btn" data-type="graveyard">Graveyard</button>
-        <button class="type-btn" data-type="village">Village</button>
-      </div>
-      <select id="sizeSelect">
-        <option value="small">Small</option>
-        <option value="medium" selected>Medium</option>
-        <option value="large">Large</option>
-      </select>
-      <div class="seed-group">
-        <input type="text" id="seedInput" placeholder="seed">
-        <button id="randomizeBtn" title="Random seed">🎲</button>
-      </div>
-      <button id="addThreatBtn" class="toggle-btn" title="Arm placement, then click the map">+ Threat</button>
-      <select id="savedThreatSelect" title="Starting stats for the next placed threat"><option value="">Blank threat</option></select>
-      <button id="deleteSavedBtn" title="Delete the selected saved threat">🗑</button>
-      <label class="toggle-group"><input type="checkbox" id="showThreatsToggle" checked> Show markers</label>
-      <button id="clearThreatsBtn" title="Remove all placed threats">Clear threats</button>
-      <button class="primary" id="generateBtn">Generate</button>
-      <button id="downloadBtn">Download PNG</button>
-      <button id="resetViewBtn" title="Re-fit the map to the screen">Reset View</button>
-    </div>
+
+<div class="app">
+  <header class="top">
+    <h1>Solar Nebula <span class="sub" id="star-name">Taurus-1</span></h1>
+    <div class="clock" aria-live="off"><span class="age" id="age">0 yr</span><span class="phase" id="phase-label">Cloud</span></div>
   </header>
-  <main>
-    <div class="canvas-wrap">
-      <canvas id="mapCanvas"></canvas>
-    </div>
-    <aside>
-      <h3>Saved Locations</h3>
-      <div class="saved-location-row">
-        <select id="savedLocationSelect"><option value="">— no saved locations —</option></select>
-        <button id="loadLocationBtn">Load</button>
-        <button id="deleteLocationBtn" title="Delete the selected saved location">🗑</button>
+
+  <main class="layout">
+    <section class="view-col" aria-label="The view">
+      <div class="view-frame">
+        <div class="rail left" id="views" role="group" aria-label="What the view shows"></div>
+        <figure class="sky" id="sky">
+          <canvas id="sky-canvas" role="img" aria-label="The cloud, the star and its disk. Drag to turn it, pinch or scroll to zoom. Pick a tool on the right to change things."></canvas>
+          <div class="scale" aria-hidden="true"><span class="bar" id="scale-bar"></span><span id="scale-label">100 AU</span></div>
+          <div class="sky-note" id="sky-note"></div>
+        </figure>
+        <div class="rail right">
+          <div class="zoom" role="group" aria-label="Zoom">
+            <button type="button" id="zoom-in" aria-label="Zoom in" title="Zoom in">+</button>
+            <button type="button" id="zoom-out" aria-label="Zoom out" title="Zoom out">−</button>
+            <button type="button" id="zoom-fit" aria-label="Fit the view to the system" title="Fit to the system">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8V3h5M12 3h5v5M17 12v5h-5M8 17H3v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+          <div class="group-label">Tools</div>
+          <div id="tools" role="group" aria-label="Tools" style="display:grid;gap:6px"></div>
+        </div>
       </div>
-      <button id="saveLocationBtn">💾 Save this location</button>
-      <input type="text" id="mapTitleInput" class="title-input" aria-label="Map title">
-      <p class="flavor" id="mapFlavor">—</p>
-      <h3>Keeper Notes</h3>
-      <textarea id="mapNotes" class="notes-area" placeholder="Notes for this location — whatever the Keeper needs to remember."></textarea>
-      <h3>Key</h3>
-      <ul class="key-list" id="keyList"></ul>
-      <h3 id="roomsHeading" style="display:none;">Rooms &amp; Chambers</h3>
-      <ul class="room-list" id="roomList"></ul>
-      <h3>Threats <span style="font-weight:normal; text-transform:none; letter-spacing:normal;">(Keeper only)</span></h3>
-      <p class="threat-hint">Click "+ Threat," then click the map to place a marker. Click a placed marker (or its ✕) to remove it. Stats are yours to fill in — HP/MP/Damage Bonus/Build calculate themselves from what you enter.</p>
-      <ul class="room-list threat-list" id="threatList"></ul>
-    </aside>
+      <ol class="stages" id="stages" aria-label="Stages"></ol>
+      <div class="alert" id="alert" role="alert" hidden>
+        <div class="inspect-head"><b id="alert-title">Paused</b><button type="button" class="close" id="alert-close" aria-label="Close">×</button></div>
+        <p id="alert-text"></p>
+        <div class="actions"><button type="button" id="alert-resume">Try to carry on</button><button type="button" id="alert-new">Start a new cloud</button></div>
+      </div>
+      <div class="tool-options" id="tool-options" hidden>
+        <p class="tool-hint" id="tool-hint"></p>
+        <div class="choices" id="tool-choices" role="group" aria-label="Options"></div>
+      </div>
+      <div class="inspect" id="inspect" hidden>
+        <div class="inspect-head"><b id="inspect-title">Planet</b><button type="button" class="close" id="inspect-close" aria-label="Close">×</button></div>
+        <dl class="stats" id="inspect-facts"></dl>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Readings">
+      <div class="tabs" role="tablist" aria-label="Readings">
+        <button type="button" role="tab" id="tab-system" aria-controls="pane-system" aria-selected="true">System</button>
+        <button type="button" role="tab" id="tab-profile" aria-controls="pane-profile" aria-selected="false">Profile</button>
+        <button type="button" role="tab" id="tab-settings" aria-controls="pane-settings" aria-selected="false">Settings</button>
+      </div>
+
+      <div class="pane" id="pane-system" role="tabpanel" aria-labelledby="tab-system">
+        <dl class="stats" id="stats"></dl>
+        <div class="spark-pair" style="display:grid;gap:10px">
+          <figure class="spark"><figcaption><span>Star mass</span><span class="val" id="sp-star-v"></span></figcaption><canvas id="sp-star" aria-label="The star's mass over time"></canvas></figure>
+          <figure class="spark"><figcaption><span id="sp-gas-label">Gas in the disk</span><span class="val" id="sp-gas-v"></span></figcaption><canvas id="sp-gas" aria-label="The gas in the disk over time"></canvas></figure>
+        </div>
+        <div>
+          <p class="section-title">Bodies</p>
+          <div class="bodies-wrap"><table class="bodies" id="bodies"><thead><tr><th>Body</th><th class="num">Mass</th><th class="num">Orbit</th><th class="num">Ecc.</th><th class="num">Water</th></tr></thead><tbody></tbody></table></div>
+          <p class="empty" id="bodies-empty">No planets yet. They start as dust in the disk.</p>
+        </div>
+        <div>
+          <p class="section-title">What happened</p>
+          <ol class="log" id="log" reversed></ol>
+        </div>
+      </div>
+
+      <div class="pane" id="pane-profile" role="tabpanel" aria-labelledby="tab-profile" hidden>
+        <figure class="chart">
+          <canvas id="profile" aria-label="The disk from the star outward: gas, dust and planetesimals per square centimetre, temperature, the snow line and the planets"></canvas>
+        </figure>
+        <div class="legend"><span><i style="background:var(--gas)"></i>gas</span><span><i style="background:var(--dust)"></i>dust and pebbles</span><span><i style="background:var(--plts)"></i>planetesimals</span><span><i style="background:var(--star)"></i>temperature</span><span><i style="background:var(--ice)"></i>snow line</span></div>
+        <p class="note" id="profile-note">The disk as it is now, from 0.05 AU out: surface densities in grams per square centimetre (left scale) and the midplane temperature in kelvin (right scale). Planets sit along the bottom.</p>
+      </div>
+
+      <div class="pane" id="pane-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+        <div>
+          <p class="section-title">The cloud</p>
+          <p class="note">These shape a new cloud, except the temperature, which you can change while it collapses.</p>
+        </div>
+        <div class="sliders" id="sliders-cloud"></div>
+        <div>
+          <p class="section-title">The disk</p>
+          <p class="note">These act on the disk straight away.</p>
+        </div>
+        <div class="sliders" id="sliders-disk"></div>
+        <div class="new-world">
+          <p class="section-title">New world</p>
+          <div class="seed-row"><label for="seed">Seed</label><input id="seed" autocomplete="off" spellcheck="false" maxlength="40"><button type="button" class="btn" id="seed-random">Random</button></div>
+          <div class="btn-row"><button type="button" class="btn primary" id="new-cloud">New cloud</button><button type="button" class="btn" id="new-disk">Start from a disk</button><button type="button" class="btn" id="reset-settings">Usual settings</button></div>
+          <p class="save-status" id="save-status"></p>
+        </div>
+      </div>
+    </section>
   </main>
-  <footer id="footerText">seed: —</footer>
+
+  <div class="timebar" role="region" aria-label="Time">
+    <div class="inner">
+      <button type="button" class="play" id="play" aria-label="Pause" title="Pause (space)" data-paused="false">
+        <svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg>
+        <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.2v11.6c0 .6.7 1 1.2.6l8.4-5.8a.75.75 0 0 0 0-1.2L5.2 1.6C4.7 1.2 4 1.6 4 2.2z"/></svg>
+      </button>
+      <div class="speed">
+        <label class="speed-row" for="speed"><span>Speed</span><input type="range" id="speed" min="-3" max="6" step="1" value="0"><output id="speed-out" for="speed">×1</output></label>
+        <div class="rate" id="rate">starting…</div>
+      </div>
+      <button type="button" class="skip" id="skip" title="Hurry on to the next stage" aria-pressed="false">Skip ▸▸</button>
+    </div>
+  </div>
 </div>
-<script>
-'use strict';
 
-/* ---------------------------------------------------------------------
- * PRNG
- * ------------------------------------------------------------------- */
-function cyrb53(str, seed) {
-  seed = seed || 0;
-  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
-  for (let i = 0; i < str.length; i++) {
-    const ch = str.charCodeAt(i);
-    h1 = Math.imul(h1 ^ ch, 2654435761);
-    h2 = Math.imul(h2 ^ ch, 1597334677);
-  }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
-}
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return function () {
-    a |= 0; a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-function makeRng(seedStr) {
-  const n = cyrb53(seedStr);
-  return mulberry32(n % 4294967296);
-}
-
-/* ---------------------------------------------------------------------
- * Grid primitives
- * ------------------------------------------------------------------- */
-const WALL = 0, FLOOR = 1, DOOR = 2, WATER = 3, PATH = 4;
-
-function idx(cols, x, y) { return y * cols + x; }
-function inBounds(cols, rows, x, y) { return x >= 0 && y >= 0 && x < cols && y < rows; }
-function makeGrid(cols, rows, fill) { return new Uint8Array(cols * rows).fill(fill); }
-
-function bfsDistance(grid, cols, rows, isSource) {
-  const dist = new Int32Array(cols * rows).fill(-1);
-  const qx = [], qy = [];
-  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
-    if (isSource(grid[idx(cols, x, y)])) { dist[idx(cols, x, y)] = 0; qx.push(x); qy.push(y); }
-  }
-  let head = 0;
-  const NB = [[1,0],[-1,0],[0,1],[0,-1]];
-  while (head < qx.length) {
-    const x = qx[head], y = qy[head]; head++;
-    const d = dist[idx(cols, x, y)];
-    for (const [dx, dy] of NB) {
-      const nx = x + dx, ny = y + dy;
-      if (!inBounds(cols, rows, nx, ny)) continue;
-      const ni = idx(cols, nx, ny);
-      if (dist[ni] === -1) { dist[ni] = d + 1; qx.push(nx); qy.push(ny); }
-    }
-  }
-  return dist;
-}
-
-function findRegions(grid, cols, rows, isFloor) {
-  const seen = new Uint8Array(cols * rows);
-  const regions = [];
-  const NB = [[1,0],[-1,0],[0,1],[0,-1]];
-  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
-    const i = idx(cols, x, y);
-    if (seen[i] || !isFloor(grid[i])) continue;
-    const region = [];
-    const stack = [[x, y]];
-    seen[i] = 1;
-    while (stack.length) {
-      const [cx, cy] = stack.pop();
-      region.push({ x: cx, y: cy });
-      for (const [dx, dy] of NB) {
-        const nx = cx + dx, ny = cy + dy;
-        if (!inBounds(cols, rows, nx, ny)) continue;
-        const ni = idx(cols, nx, ny);
-        if (!seen[ni] && isFloor(grid[ni])) { seen[ni] = 1; stack.push([nx, ny]); }
-      }
-    }
-    regions.push(region);
-  }
-  return regions;
-}
-
-function carveLine(grid, cols, rows, x0, y0, x1, y1, rng, width, type) {
-  let x = x0, y = y0;
-  const setFloor = (cx, cy) => { if (inBounds(cols, rows, cx, cy)) grid[idx(cols, cx, cy)] = type; };
-  let guard = 0;
-  while ((x !== x1 || y !== y1) && guard++ < 4000) {
-    setFloor(x, y);
-    if (width > 1) { setFloor(x + 1, y); setFloor(x, y + 1); }
-    const dx = x1 - x, dy = y1 - y;
-    if (dx !== 0 && (dy === 0 || rng() < 0.5)) x += dx > 0 ? 1 : -1;
-    else if (dy !== 0) y += dy > 0 ? 1 : -1;
-  }
-  setFloor(x1, y1);
-}
-
-// Shared across generators so recurring family names read as the same
-// fictional town's families, not a fresh cast per map type.
-const SURNAME_POOL = ["Ashcombe", "Whitfield", "Corbin", "Marsh", "Blackwood",
-  "Pemberton", "Corwin", "Osgood", "Blackthorn", "Hargrove"];
-
-/* ---------------------------------------------------------------------
- * Cave generator — cellular automata
- * ------------------------------------------------------------------- */
-function generateCave(cols, rows, rng) {
-  const grid = makeGrid(cols, rows, WALL);
-  for (let y = 1; y < rows - 1; y++) for (let x = 1; x < cols - 1; x++) {
-    grid[idx(cols, x, y)] = rng() < 0.45 ? WALL : FLOOR;
-  }
-  const countWalls = (x, y) => {
-    let c = 0;
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      if (dx === 0 && dy === 0) continue;
-      const nx = x + dx, ny = y + dy;
-      if (!inBounds(cols, rows, nx, ny) || grid[idx(cols, nx, ny)] === WALL) c++;
-    }
-    return c;
-  };
-  for (let iter = 0; iter < 5; iter++) {
-    const next = grid.slice();
-    for (let y = 1; y < rows - 1; y++) for (let x = 1; x < cols - 1; x++) {
-      const wn = countWalls(x, y);
-      const i = idx(cols, x, y);
-      if (wn >= 5) next[i] = WALL;
-      else if (wn <= 2) next[i] = FLOOR;
-    }
-    grid.set(next);
-  }
-  for (let x = 0; x < cols; x++) { grid[idx(cols, x, 0)] = WALL; grid[idx(cols, x, rows - 1)] = WALL; }
-  for (let y = 0; y < rows; y++) { grid[idx(cols, 0, y)] = WALL; grid[idx(cols, cols - 1, y)] = WALL; }
-
-  let regions = findRegions(grid, cols, rows, v => v === FLOOR);
-  if (regions.length === 0) {
-    const cx = Math.floor(cols / 2), cy = Math.floor(rows / 2);
-    for (let y = cy - 2; y <= cy + 2; y++) for (let x = cx - 2; x <= cx + 2; x++) grid[idx(cols, x, y)] = FLOOR;
-    regions = findRegions(grid, cols, rows, v => v === FLOOR);
-  }
-  regions.sort((a, b) => b.length - a.length);
-  const centroid = r => {
-    let sx = 0, sy = 0;
-    for (const p of r) { sx += p.x; sy += p.y; }
-    return { x: Math.round(sx / r.length), y: Math.round(sy / r.length) };
-  };
-  const mainCentroid = centroid(regions[0]);
-  for (let i = 1; i < regions.length; i++) {
-    if (regions[i].length < 4) {
-      for (const p of regions[i]) grid[idx(cols, p.x, p.y)] = WALL;
-      continue;
-    }
-    const c = centroid(regions[i]);
-    carveLine(grid, cols, rows, c.x, c.y, mainCentroid.x, mainCentroid.y, rng, 2, FLOOR);
-  }
-
-  const features = [];
-
-  const poolCount = 1 + (rng() < 0.5 ? 1 : 0);
-  for (let p = 0; p < poolCount; p++) {
-    for (let tries = 0; tries < 40; tries++) {
-      const x = 2 + Math.floor(rng() * (cols - 4));
-      const y = 2 + Math.floor(rng() * (rows - 4));
-      const i = idx(cols, x, y);
-      if (grid[i] !== FLOOR) continue;
-      const radius = 2 + Math.floor(rng() * 2);
-      for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
-        const nx = x + dx, ny = y + dy;
-        if (!inBounds(cols, rows, nx, ny)) continue;
-        if (dx * dx + dy * dy > radius * radius) continue;
-        const ni = idx(cols, nx, ny);
-        if (grid[ni] === FLOOR && rng() < 0.75) grid[ni] = WATER;
-      }
-      break;
-    }
-  }
-
-  const stalagCount = Math.floor((cols * rows) * 0.012);
-  for (let s = 0; s < stalagCount; s++) {
-    const x = 1 + Math.floor(rng() * (cols - 2));
-    const y = 1 + Math.floor(rng() * (rows - 2));
-    if (grid[idx(cols, x, y)] === FLOOR && rng() < 0.5) features.push({ type: 'stalagmite', x, y });
-  }
-
-  let idolCell = null;
-  for (let tries = 0; tries < 200 && !idolCell; tries++) {
-    const x = 1 + Math.floor(rng() * (cols - 2));
-    const y = 1 + Math.floor(rng() * (rows - 2));
-    if (grid[idx(cols, x, y)] !== FLOOR) continue;
-    let fn = 0;
-    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
-      const nx = x + dx, ny = y + dy;
-      if (inBounds(cols, rows, nx, ny) && grid[idx(cols, nx, ny)] === FLOOR) fn++;
-    }
-    if (fn <= 1) idolCell = { x, y };
-  }
-  if (!idolCell) {
-    const floors = [];
-    for (let i = 0; i < grid.length; i++) if (grid[i] === FLOOR) floors.push(i);
-    if (floors.length) {
-      const pick = floors[Math.floor(rng() * floors.length)];
-      idolCell = { x: pick % cols, y: Math.floor(pick / cols) };
-    }
-  }
-  if (idolCell) features.push({ type: 'idol', x: idolCell.x, y: idolCell.y });
-
-  const key = [
-    { color: '#c9a86a', label: 'Cavern floor' },
-    { color: '#241d13', label: 'Solid rock' },
-    { color: '#3f6f8a', label: 'Standing water' },
-    { label: 'Stalagmite cluster' },
-    { label: 'Strange carved idol' },
-  ];
-  const flavorPool = [
-    "Water drips somewhere in the dark, counting seconds no one asked to measure.",
-    "The rock here is unnaturally smooth, as if worn by something other than water.",
-    "Local fishermen call these caves 'the Throat' and refuse to say why.",
-    "A survey team entered three weeks ago. Their lanterns were found still burning, arranged in a perfect circle.",
-    "Something down here breathes on a forty-second cycle. The survey team clocked it. Twice.",
-  ];
-  return {
-    cols, rows, grid, features, rooms: [], mapType: 'cave',
-    title: 'Uncharted Sea Cave',
-    flavor: flavorPool[Math.floor(rng() * flavorPool.length)],
-    key,
-  };
-}
-
-/* ---------------------------------------------------------------------
- * Mansion generator — BSP rooms + corridors
- * ------------------------------------------------------------------- */
-function generateMansion(cols, rows, rng) {
-  const grid = makeGrid(cols, rows, WALL);
-  const minLeaf = 8;
-  const leaves = [];
-  function split(rect, depth) {
-    const canSplitW = rect.w > minLeaf * 2;
-    const canSplitH = rect.h > minLeaf * 2;
-    if (depth <= 0 || (!canSplitW && !canSplitH)) { leaves.push(rect); return; }
-    let splitVertical;
-    if (canSplitW && canSplitH) splitVertical = rng() < 0.5;
-    else splitVertical = canSplitW;
-    if (splitVertical) {
-      const minCut = Math.floor(rect.w * 0.35), maxCut = Math.ceil(rect.w * 0.65);
-      const cut = minCut + Math.floor(rng() * Math.max(1, maxCut - minCut));
-      split({ x: rect.x, y: rect.y, w: cut, h: rect.h }, depth - 1);
-      split({ x: rect.x + cut, y: rect.y, w: rect.w - cut, h: rect.h }, depth - 1);
-    } else {
-      const minCut = Math.floor(rect.h * 0.35), maxCut = Math.ceil(rect.h * 0.65);
-      const cut = minCut + Math.floor(rng() * Math.max(1, maxCut - minCut));
-      split({ x: rect.x, y: rect.y, w: rect.w, h: cut }, depth - 1);
-      split({ x: rect.x, y: rect.y + cut, w: rect.w, h: rect.h - cut }, depth - 1);
-    }
-  }
-  split({ x: 1, y: 1, w: cols - 2, h: rows - 2 }, 4);
-
-  const labelPool = ["Study", "Library", "Parlor", "Dining Hall", "Kitchen", "Master Bedroom",
-    "Guest Bedroom", "Servants' Quarters", "Cellar Stair", "Attic Stair", "Music Room",
-    "Trophy Room", "Billiard Room", "Nursery", "Conservatory"];
-  const secretLabelPool = ["Locked Room", "Hidden Ritual Chamber", "Sealed Study", "Forgotten Nursery"];
-  const usedLabels = new Set();
-  const rooms = [];
-  for (const leaf of leaves) {
-    const pad = 1;
-    const rw = Math.max(4, leaf.w - pad * 2 - Math.floor(rng() * 2));
-    const rh = Math.max(4, leaf.h - pad * 2 - Math.floor(rng() * 2));
-    const rx = leaf.x + pad + Math.floor(rng() * Math.max(1, leaf.w - rw - pad * 2 + 1));
-    const ry = leaf.y + pad + Math.floor(rng() * Math.max(1, leaf.h - rh - pad * 2 + 1));
-    const w = Math.min(rw, leaf.x + leaf.w - rx - 1);
-    const h = Math.min(rh, leaf.y + leaf.h - ry - 1);
-    if (w < 3 || h < 3) continue;
-    for (let y = ry; y < ry + h; y++) for (let x = rx; x < rx + w; x++) {
-      if (inBounds(cols, rows, x, y)) grid[idx(cols, x, y)] = FLOOR;
-    }
-    let label;
-    let guard = 0;
-    do { label = labelPool[Math.floor(rng() * labelPool.length)]; guard++; }
-    while (usedLabels.has(label) && guard < 30);
-    usedLabels.add(label);
-    const secret = rooms.length > 2 && rng() < 0.12;
-    const finalLabel = secret ? secretLabelPool[Math.floor(rng() * secretLabelPool.length)] : label;
-    rooms.push({ x: rx, y: ry, w, h, cx: rx + Math.floor(w / 2), cy: ry + Math.floor(h / 2), label: finalLabel, secret });
-  }
-
-  function isOnRoomBoundary(room, x, y) {
-    const withinX = x >= room.x && x < room.x + room.w;
-    const withinY = y >= room.y && y < room.y + room.h;
-    if ((x === room.x - 1 || x === room.x + room.w) && withinY) return true;
-    if ((y === room.y - 1 || y === room.y + room.h) && withinX) return true;
-    return false;
-  }
-  function placeCorridorCell(x, y) {
-    if (!inBounds(cols, rows, x, y)) return;
-    const i = idx(cols, x, y);
-    if (grid[i] === FLOOR) return;
-    let door = false;
-    for (const room of rooms) if (isOnRoomBoundary(room, x, y)) { door = true; break; }
-    grid[i] = door ? DOOR : FLOOR;
-  }
-  function carveCorridorL(a, b) {
-    let x = a.cx, y = a.cy;
-    const midX = rng() < 0.5 ? b.cx : a.cx;
-    while (x !== midX) { x += midX > x ? 1 : -1; placeCorridorCell(x, y); }
-    while (y !== b.cy) { y += b.cy > y ? 1 : -1; placeCorridorCell(x, y); }
-    while (x !== b.cx) { x += b.cx > x ? 1 : -1; placeCorridorCell(x, y); }
-  }
-  for (let i = 0; i < rooms.length - 1; i++) carveCorridorL(rooms[i], rooms[i + 1]);
-
-  const furnitureByLabel = {
-    "Study": "desk", "Library": "bookshelf", "Parlor": "table", "Dining Hall": "table",
-    "Kitchen": "hearth", "Master Bedroom": "bed", "Guest Bedroom": "bed", "Servants' Quarters": "bed",
-    "Cellar Stair": "stairs", "Attic Stair": "stairs", "Music Room": "table", "Trophy Room": "bookshelf",
-    "Billiard Room": "table", "Nursery": "bed", "Conservatory": "table",
-    "Locked Room": "crate", "Hidden Ritual Chamber": "sigil", "Sealed Study": "desk", "Forgotten Nursery": "bed",
-  };
-  const features = [];
-  for (const room of rooms) {
-    const f = furnitureByLabel[room.label];
-    if (f && rng() < 0.85) features.push({ type: f, x: room.cx, y: room.cy, room });
-  }
-
-  const key = [
-    { color: '#d8c69a', label: 'Floor' },
-    { color: '#241f18', label: 'Wall' },
-    { color: '#5a3624', label: 'Door' },
-    { label: 'Bed / Bookshelf / Table / Hearth' },
-    { label: 'Something drawn on the floor (sigil)' },
-  ];
-  const flavorPool = [
-    "The deed lists no owner for the last forty years, yet the grounds are kept immaculate.",
-    "Every clock in the house has stopped at 3:17.",
-    "Servants report the house has more rooms after dark than before it.",
-    "The previous tenant's letters describe a door that 'should not be opened before Walpurgisnacht.'",
-    "The family portraits have been turned to face the wall, every single one.",
-  ];
-  return {
-    cols, rows, grid, features, rooms, mapType: 'mansion',
-    title: 'Ashcombe Hall',
-    flavor: flavorPool[Math.floor(rng() * flavorPool.length)],
-    key,
-  };
-}
-
-/* ---------------------------------------------------------------------
- * Crypt generator — winding spine + burial chambers
- * ------------------------------------------------------------------- */
-function generateCrypt(cols, rows, rng) {
-  const grid = makeGrid(cols, rows, WALL);
-  const chambers = [];
-  const features = [];
-  let x = Math.floor(cols / 2), y = rows - 3;
-  grid[idx(cols, x, y)] = FLOOR;
-  features.push({ type: 'stairs', x, y });
-  const dirs = [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }];
-  let dir = { dx: 0, dy: -1 };
-  const mainLength = Math.floor((cols + rows) * 1.1);
-  let sinceBranch = 0;
-
-  function carveChamber(cx, cy, corridorDir) {
-    const perp = corridorDir.dx !== 0
-      ? [{ dx: 0, dy: 1 }, { dx: 0, dy: -1 }][Math.floor(rng() * 2)]
-      : [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }][Math.floor(rng() * 2)];
-    const cw = 3 + Math.floor(rng() * 3), ch = 3 + Math.floor(rng() * 3);
-    const doorX = cx + perp.dx, doorY = cy + perp.dy;
-    let rx, ry;
-    if (perp.dx !== 0) { rx = doorX + (perp.dx > 0 ? 0 : -(cw - 1)); ry = cy - Math.floor(ch / 2); }
-    else { rx = cx - Math.floor(cw / 2); ry = doorY + (perp.dy > 0 ? 0 : -(ch - 1)); }
-    if (rx < 1 || ry < 1 || rx + cw >= cols - 1 || ry + ch >= rows - 1) return;
-    let openCount = 0, total = 0;
-    for (let yy = ry; yy < ry + ch; yy++) for (let xx = rx; xx < rx + cw; xx++) {
-      total++; if (grid[idx(cols, xx, yy)] === FLOOR) openCount++;
-    }
-    if (openCount > total * 0.15) return;
-    for (let yy = ry; yy < ry + ch; yy++) for (let xx = rx; xx < rx + cw; xx++) grid[idx(cols, xx, yy)] = FLOOR;
-    const secret = rng() < 0.18;
-    grid[idx(cols, doorX, doorY)] = DOOR;
-    const labelPool = secret
-      ? ["Sealed Vault", "Forgotten Ossuary", "Walled-Up Chamber"]
-      : ["Burial Niche", "Family Vault", "Ossuary", "Reliquary Alcove"];
-    const label = labelPool[Math.floor(rng() * labelPool.length)];
-    const chamber = { x: rx, y: ry, w: cw, h: ch, label, secret, doorX, doorY };
-    chambers.push(chamber);
-    const sarcoCount = 1 + Math.floor(rng() * 2);
-    for (let s = 0; s < sarcoCount; s++) {
-      const sx = rx + 1 + Math.floor(rng() * Math.max(1, cw - 2));
-      const sy = ry + 1 + Math.floor(rng() * Math.max(1, ch - 2));
-      if (grid[idx(cols, sx, sy)] === FLOOR) features.push({ type: secret ? 'idol' : 'sarcophagus', x: sx, y: sy, room: chamber });
-    }
-  }
-
-  for (let step = 0; step < mainLength; step++) {
-    if (rng() < 0.22) {
-      const choices = dirs.filter(d => !(d.dx === -dir.dx && d.dy === -dir.dy));
-      dir = choices[Math.floor(rng() * choices.length)];
-    }
-    const nx = x + dir.dx, ny = y + dir.dy;
-    if (!inBounds(cols, rows, nx, ny) || nx < 2 || ny < 2 || nx > cols - 3 || ny > rows - 3) {
-      dir = dirs[Math.floor(rng() * dirs.length)];
-      continue;
-    }
-    x = nx; y = ny;
-    grid[idx(cols, x, y)] = FLOOR;
-    sinceBranch++;
-    if (sinceBranch > 4 && rng() < 0.22) { sinceBranch = 0; carveChamber(x, y, dir); }
-  }
-
-  const key = [
-    { color: '#b7a077', label: 'Passage floor' },
-    { color: '#1c1712', label: 'Packed earth / rock' },
-    { color: '#5a3624', label: 'Door' },
-    { label: 'Sarcophagus' },
-    { label: 'Stair to surface' },
-    { label: 'Something that should stay sealed' },
-  ];
-  const flavorPool = [
-    "The stonework predates the family names carved into it.",
-    "Fresh scratches mark the inside of the third sarcophagus lid.",
-    "The air here does not move, and has not for a very long time.",
-    "Someone — or something — has re-sealed one of the vaults from within.",
-    "A ledger by the entrance records visitors. The last entry is dated to a day that hasn't happened yet.",
-  ];
-  return {
-    cols, rows, grid, features, rooms: chambers, mapType: 'crypt',
-    title: 'The Hargrove Vault',
-    flavor: flavorPool[Math.floor(rng() * flavorPool.length)],
-    key,
-  };
-}
-
-/* ---------------------------------------------------------------------
- * Graveyard generator — plot, paths, headstones, mausolea
- * ------------------------------------------------------------------- */
-function generateGraveyard(cols, rows, rng) {
-  const grid = makeGrid(cols, rows, FLOOR);
-  for (let x = 0; x < cols; x++) { grid[idx(cols, x, 0)] = WALL; grid[idx(cols, x, rows - 1)] = WALL; }
-  for (let y = 0; y < rows; y++) { grid[idx(cols, 0, y)] = WALL; grid[idx(cols, cols - 1, y)] = WALL; }
-  const gateX = Math.floor(cols / 2);
-  grid[idx(cols, gateX - 1, rows - 1)] = DOOR;
-  grid[idx(cols, gateX, rows - 1)] = DOOR;
-  grid[idx(cols, gateX + 1, rows - 1)] = DOOR;
-
-  const features = [];
-  let x = gateX, y = rows - 2;
-  grid[idx(cols, x, y)] = PATH;
-  const mainSteps = rows - 4;
-  for (let i = 0; i < mainSteps; i++) {
-    y -= 1;
-    if (rng() < 0.3) x += rng() < 0.5 ? 1 : -1;
-    x = Math.max(2, Math.min(cols - 3, x));
-    if (!inBounds(cols, rows, x, y)) break;
-    grid[idx(cols, x, y)] = PATH;
-  }
-  const branchCount = 2 + Math.floor(rng() * 3);
-  for (let b = 0; b < branchCount; b++) {
-    let bx = 2 + Math.floor(rng() * (cols - 4));
-    let by = 2 + Math.floor(rng() * (rows - 4));
-    const steps = 5 + Math.floor(rng() * 8);
-    const ddx = rng() < 0.5 ? 1 : -1;
-    for (let s = 0; s < steps; s++) {
-      if (!inBounds(cols, rows, bx, by)) break;
-      if (grid[idx(cols, bx, by)] === FLOOR) grid[idx(cols, bx, by)] = PATH;
-      if (rng() < 0.6) bx += ddx; else by += rng() < 0.5 ? 1 : -1;
-      bx = Math.max(1, Math.min(cols - 2, bx));
-      by = Math.max(1, Math.min(rows - 2, by));
-    }
-  }
-
-  const rooms = [];
-  const mausCount = rng() < 0.7 ? 1 : 2;
-  for (let m = 0; m < mausCount; m++) {
-    for (let tries = 0; tries < 30; tries++) {
-      const mw = 4 + Math.floor(rng() * 2), mh = 4 + Math.floor(rng() * 2);
-      const mx = 2 + Math.floor(rng() * Math.max(1, cols - mw - 4));
-      const my = 2 + Math.floor(rng() * Math.max(1, rows - mh - 4));
-      let clear = true;
-      for (let yy = my - 1; yy <= my + mh && clear; yy++) for (let xx = mx - 1; xx <= mx + mw; xx++) {
-        if (!inBounds(cols, rows, xx, yy) || grid[idx(cols, xx, yy)] !== FLOOR) { clear = false; break; }
-      }
-      if (!clear) continue;
-      for (let yy = my; yy < my + mh; yy++) for (let xx = mx; xx < mx + mw; xx++) grid[idx(cols, xx, yy)] = WALL;
-      for (let yy = my + 1; yy < my + mh - 1; yy++) for (let xx = mx + 1; xx < mx + mw - 1; xx++) grid[idx(cols, xx, yy)] = FLOOR;
-      const doorSide = Math.floor(rng() * 4);
-      let dx2, dy2;
-      if (doorSide === 0) { dx2 = mx + Math.floor(mw / 2); dy2 = my; }
-      else if (doorSide === 1) { dx2 = mx + Math.floor(mw / 2); dy2 = my + mh - 1; }
-      else if (doorSide === 2) { dx2 = mx; dy2 = my + Math.floor(mh / 2); }
-      else { dx2 = mx + mw - 1; dy2 = my + Math.floor(mh / 2); }
-      grid[idx(cols, dx2, dy2)] = DOOR;
-      const room = { x: mx, y: my, w: mw, h: mh, label: `Mausoleum of the ${SURNAME_POOL[Math.floor(rng() * SURNAME_POOL.length)]} Family` };
-      rooms.push(room);
-      features.push({ type: 'sarcophagus', x: mx + Math.floor(mw / 2), y: my + Math.floor(mh / 2), room });
-      break;
-    }
-  }
-
-  const placed = [];
-  const targetCount = Math.floor(cols * rows * 0.06);
-  let attempts = 0;
-  while (placed.length < targetCount && attempts < targetCount * 20) {
-    attempts++;
-    const hx = 1 + Math.floor(rng() * (cols - 2));
-    const hy = 1 + Math.floor(rng() * (rows - 2));
-    if (grid[idx(cols, hx, hy)] !== FLOOR) continue;
-    let tooClose = false;
-    for (const p of placed) if (Math.abs(p.x - hx) <= 1 && Math.abs(p.y - hy) <= 1) { tooClose = true; break; }
-    if (tooClose) continue;
-    placed.push({ x: hx, y: hy });
-  }
-  for (const p of placed) features.push({ type: 'headstone', x: p.x, y: p.y, rot: (rng() - 0.5) * 0.35 });
-
-  const treeCount = 2 + Math.floor(rng() * 3);
-  for (let t = 0; t < treeCount; t++) {
-    for (let tries = 0; tries < 20; tries++) {
-      const tx = 1 + Math.floor(rng() * (cols - 2)), ty = 1 + Math.floor(rng() * (rows - 2));
-      if (grid[idx(cols, tx, ty)] === FLOOR) {
-        let clash = false;
-        for (const f of features) if (f.x === tx && f.y === ty) { clash = true; break; }
-        if (!clash) { features.push({ type: 'tree', x: tx, y: ty }); break; }
-      }
-    }
-  }
-
-  const groundHeadstones = features.filter(f => f.type === 'headstone');
-  if (groundHeadstones.length && rng() < 0.8) {
-    const pick = groundHeadstones[Math.floor(rng() * groundHeadstones.length)];
-    const dy = pick.y + 1 < rows - 1 ? pick.y + 1 : pick.y - 1;
-    features.push({ type: 'disturbed', x: pick.x, y: dy });
-  }
-
-  const key = [
-    { color: '#71805c', label: 'Grounds' },
-    { color: '#8d8262', label: 'Gravel path' },
-    { color: '#2c2a22', label: 'Fence / wall' },
-    { label: 'Headstone' },
-    { label: 'Dead tree' },
-    { label: 'Mausoleum interior' },
-    { label: 'Freshly disturbed earth (Keeper hook)' },
-  ];
-  const flavorPool = [
-    "The sexton keeps a ledger of burials. Page 114 has been torn out.",
-    "Fresh flowers appear on an unmarked plot every new moon.",
-    "Three headstones near the fence share the same death date.",
-    "The gate is never locked. The groundskeeper says it doesn't matter.",
-    "A dog will not cross the north-east corner of the grounds. Neither will most cats.",
-  ];
-  return {
-    cols, rows, grid, features, rooms, mapType: 'graveyard',
-    title: "St. Osmund's Burying Ground",
-    flavor: flavorPool[Math.floor(rng() * flavorPool.length)],
-    key,
-  };
-}
-
-/* ---------------------------------------------------------------------
- * Village generator — a main road + side lanes, scattered buildings.
- * Each building is a small named "room" the same way mansion rooms are,
- * but most also carry a `lead` — a one-line investigation hook — so the
- * sidebar doubles as a prep sheet: where the Keeper seeded what, at a
- * glance, without digging back through notes mid-session.
- * ------------------------------------------------------------------- */
-function generateVillage(cols, rows, rng) {
-  const grid = makeGrid(cols, rows, FLOOR);
-  const features = [];
-
-  const vertical = rng() < 0.5;
-  if (vertical) {
-    let rx = Math.floor(cols * (0.3 + rng() * 0.4));
-    for (let ry = 0; ry < rows; ry++) {
-      if (rng() < 0.22) rx += rng() < 0.5 ? 1 : -1;
-      rx = Math.max(2, Math.min(cols - 4, rx));
-      grid[idx(cols, rx, ry)] = PATH;
-      grid[idx(cols, rx + 1, ry)] = PATH;
-    }
-  } else {
-    let ry = Math.floor(rows * (0.3 + rng() * 0.4));
-    for (let rx = 0; rx < cols; rx++) {
-      if (rng() < 0.22) ry += rng() < 0.5 ? 1 : -1;
-      ry = Math.max(2, Math.min(rows - 4, ry));
-      grid[idx(cols, rx, ry)] = PATH;
-      grid[idx(cols, rx, ry + 1)] = PATH;
-    }
-  }
-  const laneCount = 3 + Math.floor(rng() * 4);
-  for (let b = 0; b < laneCount; b++) {
-    let bx = 2 + Math.floor(rng() * (cols - 4));
-    let by = 2 + Math.floor(rng() * (rows - 4));
-    const steps = 6 + Math.floor(rng() * 10);
-    const ddx = rng() < 0.5 ? 1 : -1;
-    for (let s = 0; s < steps; s++) {
-      if (!inBounds(cols, rows, bx, by)) break;
-      if (grid[idx(cols, bx, by)] === FLOOR) grid[idx(cols, bx, by)] = PATH;
-      if (rng() < 0.6) bx += ddx; else by += rng() < 0.5 ? 1 : -1;
-      bx = Math.max(1, Math.min(cols - 2, bx));
-      by = Math.max(1, Math.min(rows - 2, by));
-    }
-  }
-
-  const LOCATIONS = [
-    { label: 'General Store', furniture: 'crate' },
-    { label: "Sheriff's Office", furniture: 'desk' },
-    { label: "Doctor's House", furniture: 'desk' },
-    { label: 'Boarding House', furniture: 'bed' },
-    { label: 'The Anchor Inn', furniture: 'table' },
-    { label: 'Chapel', furniture: null },
-    { label: 'Post Office', furniture: 'desk' },
-    { label: 'Blacksmith', furniture: 'crate' },
-    { label: "Fisherman's Shack", furniture: 'crate' },
-    { label: 'Schoolhouse', furniture: 'bookshelf' },
-    { label: 'Newspaper Office', furniture: 'desk' },
-    { label: 'Town Hall', furniture: 'bookshelf' },
-    { label: 'Antiques & Curiosities', furniture: 'crate' },
-    { label: 'Family Residence', familyName: true, furniture: 'table' },
-  ];
-  const SECRET_LOCATIONS = [
-    { label: 'Boarded-Up Cottage', furniture: null },
-    { label: 'Locked Storm Cellar', furniture: null },
-    { label: 'Abandoned Chandlery', furniture: 'crate' },
-    { label: 'Sealed Meeting House', furniture: null },
-  ];
-
-  const rooms = [];
-  const usedLabels = new Set();
-  const buildingTarget = 7 + Math.floor((cols * rows) / 260);
-  let placed = 0, guardOuter = 0;
-  while (placed < buildingTarget && guardOuter++ < buildingTarget * 30) {
-    const bw = 3 + Math.floor(rng() * 3), bh = 3 + Math.floor(rng() * 3);
-    const bx = 2 + Math.floor(rng() * Math.max(1, cols - bw - 4));
-    const by = 2 + Math.floor(rng() * Math.max(1, rows - bh - 4));
-    let clear = true;
-    for (let yy = by - 1; yy <= by + bh && clear; yy++) for (let xx = bx - 1; xx <= bx + bw; xx++) {
-      if (!inBounds(cols, rows, xx, yy) || grid[idx(cols, xx, yy)] !== FLOOR) { clear = false; break; }
-    }
-    if (!clear) continue;
-
-    for (let yy = by; yy < by + bh; yy++) for (let xx = bx; xx < bx + bw; xx++) grid[idx(cols, xx, yy)] = WALL;
-    for (let yy = by + 1; yy < by + bh - 1; yy++) for (let xx = bx + 1; xx < bx + bw - 1; xx++) grid[idx(cols, xx, yy)] = FLOOR;
-    const doorSide = Math.floor(rng() * 4);
-    let dx2, dy2;
-    if (doorSide === 0) { dx2 = bx + Math.floor(bw / 2); dy2 = by; }
-    else if (doorSide === 1) { dx2 = bx + Math.floor(bw / 2); dy2 = by + bh - 1; }
-    else if (doorSide === 2) { dx2 = bx; dy2 = by + Math.floor(bh / 2); }
-    else { dx2 = bx + bw - 1; dy2 = by + Math.floor(bh / 2); }
-    grid[idx(cols, dx2, dy2)] = DOOR;
-
-    const secret = placed > 2 && rng() < 0.14;
-    const pool = secret ? SECRET_LOCATIONS : LOCATIONS;
-    let entry, label;
-    let guard = 0;
-    do {
-      entry = pool[Math.floor(rng() * pool.length)];
-      label = entry.familyName ? `${SURNAME_POOL[Math.floor(rng() * SURNAME_POOL.length)]} Residence` : entry.label;
-      guard++;
-    } while (usedLabels.has(label) && guard < 30 && !secret);
-    usedLabels.add(label);
-
-    const room = {
-      x: bx, y: by, w: bw, h: bh,
-      cx: bx + Math.floor(bw / 2), cy: by + Math.floor(bh / 2),
-      label, secret,
-    };
-    rooms.push(room);
-    placed++;
-    if (entry.furniture && rng() < 0.85) features.push({ type: entry.furniture, x: room.cx, y: room.cy, room });
-  }
-
-  for (let tries = 0; tries < 60; tries++) {
-    const wx = 2 + Math.floor(rng() * (cols - 4));
-    const wy = 2 + Math.floor(rng() * (rows - 4));
-    if (grid[idx(cols, wx, wy)] !== FLOOR) continue;
-    let clash = false;
-    for (const f of features) if (Math.abs(f.x - wx) <= 1 && Math.abs(f.y - wy) <= 1) { clash = true; break; }
-    if (!clash) { features.push({ type: 'well', x: wx, y: wy }); break; }
-  }
-
-  const key = [
-    { color: '#8a7a5c', label: 'Open ground' },
-    { color: '#6b5a44', label: 'Road / lane' },
-    { color: '#3a2f22', label: 'Building wall' },
-    { color: '#5a3624', label: 'Door' },
-    { label: 'Well' },
-    { label: 'Furnishings (desk, crate, table, ...)' },
-  ];
-  const flavorPool = [
-    "The harbor bell rings at dusk whether or not there's a ship to greet.",
-    "No one in town will say how long the Corwin place has stood empty, only that it's better left that way.",
-    "Half the storefronts change hands every few years. The other half have never changed hands at all.",
-    "The town council keeps minutes for meetings no one remembers attending.",
-    "Every family here has a story about a relative who 'went to sea and never wrote.'",
-  ];
-  return {
-    cols, rows, grid, features, rooms, mapType: 'village',
-    title: 'Ashford Cove',
-    flavor: flavorPool[Math.floor(rng() * flavorPool.length)],
-    key,
-  };
-}
-
-/* ---------------------------------------------------------------------
- * Rendering
- * ------------------------------------------------------------------- */
-const PALETTES = {
-  cave: { floor: '#c9a86a', floorAlt: '#bd9c5c', wallNear: '#4a3a26', wallFar: '#140f0a', water: '#3f6f8a', waterAlt: '#376280', door: '#5a3624', ink: '#160f09' },
-  mansion: { floor: '#d8c69a', floorAlt: '#cfbb8c', wall: '#241f18', door: '#5a3624', ink: '#1c150e' },
-  crypt: { floor: '#b7a077', floorAlt: '#ab9469', wallNear: '#3a3226', wallFar: '#120e0a', door: '#5a3624', ink: '#160f09' },
-  graveyard: { ground: '#71805c', groundAlt: '#687654', path: '#8d8262', pathAlt: '#847958', wall: '#2c2a22', door: '#5a3624', ink: '#1c1a12' },
-  village: { ground: '#8a7a5c', groundAlt: '#7f7154', path: '#6b5a44', pathAlt: '#645440', wall: '#3a2f22', door: '#5a3624', ink: '#241d15' },
-};
-
-function hash2(x, y) {
-  let h = (x * 374761393 + y * 668265263) ^ (x * 2654435761);
-  h = (h ^ (h >>> 13)) * 1274126177;
-  return ((h ^ (h >>> 16)) >>> 0) % 100;
-}
-function mixColor(c1, c2, t) {
-  const p1 = parseInt(c1.slice(1), 16), p2 = parseInt(c2.slice(1), 16);
-  const r1 = (p1 >> 16) & 255, g1 = (p1 >> 8) & 255, b1 = p1 & 255;
-  const r2 = (p2 >> 16) & 255, g2 = (p2 >> 8) & 255, b2 = p2 & 255;
-  const r = Math.round(r1 + (r2 - r1) * t), g = Math.round(g1 + (g2 - g1) * t), b = Math.round(b1 + (b2 - b1) * t);
-  return `rgb(${r},${g},${b})`;
-}
-
-function isSolid(t) { return t === WALL; }
-
-function drawFeature(ctx, f, cs) {
-  const px = (f.x + 0.5) * cs, py = (f.y + 0.5) * cs;
-  ctx.save();
-  ctx.translate(px, py);
-  ctx.lineWidth = Math.max(1, cs * 0.06);
-  switch (f.type) {
-    case 'stalagmite': {
-      ctx.fillStyle = '#6b5a3e';
-      for (let i = 0; i < 3; i++) {
-        const ox = (i - 1) * cs * 0.22, sz = cs * (0.14 + (i % 2) * 0.06);
-        ctx.beginPath();
-        ctx.moveTo(ox - sz * 0.4, cs * 0.25);
-        ctx.lineTo(ox + sz * 0.4, cs * 0.25);
-        ctx.lineTo(ox, cs * 0.25 - sz);
-        ctx.closePath();
-        ctx.fill();
-      }
-      break;
-    }
-    case 'idol': {
-      ctx.strokeStyle = '#7c1f1f';
-      ctx.fillStyle = '#2a1010';
-      ctx.beginPath();
-      ctx.arc(0, 0, cs * 0.22, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      for (let i = 0; i < 7; i++) {
-        const a = (i / 7) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * cs * 0.24, Math.sin(a) * cs * 0.24);
-        ctx.lineTo(Math.cos(a) * cs * 0.42, Math.sin(a) * cs * 0.42);
-        ctx.stroke();
-      }
-      break;
-    }
-    case 'headstone': {
-      ctx.rotate(f.rot || 0);
-      ctx.fillStyle = '#8a8a82';
-      ctx.strokeStyle = '#3a3a34';
-      const w = cs * 0.5, h = cs * 0.62;
-      ctx.beginPath();
-      ctx.moveTo(-w / 2, h / 2);
-      ctx.lineTo(-w / 2, -h / 4);
-      ctx.arc(0, -h / 4, w / 2, Math.PI, 0);
-      ctx.lineTo(w / 2, h / 2);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(0, -h / 8);
-      ctx.lineTo(0, h / 6);
-      ctx.moveTo(-w / 5, h / 24);
-      ctx.lineTo(w / 5, h / 24);
-      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-      ctx.stroke();
-      break;
-    }
-    case 'tree': {
-      ctx.strokeStyle = '#241f18';
-      ctx.beginPath();
-      ctx.moveTo(0, cs * 0.35);
-      ctx.lineTo(0, -cs * 0.05);
-      ctx.stroke();
-      const branches = [[-0.28, -0.35], [0.3, -0.32], [-0.16, -0.42], [0.1, -0.45]];
-      for (const [bx, by] of branches) {
-        ctx.beginPath();
-        ctx.moveTo(0, -cs * 0.05);
-        ctx.lineTo(cs * bx, cs * by);
-        ctx.stroke();
-      }
-      break;
-    }
-    case 'sarcophagus': {
-      ctx.fillStyle = '#8f8a78';
-      ctx.strokeStyle = '#3a362c';
-      const w = cs * 0.7, h = cs * 0.45;
-      ctx.fillRect(-w / 2, -h / 2, w, h);
-      ctx.strokeRect(-w / 2, -h / 2, w, h);
-      ctx.beginPath();
-      ctx.moveTo(-w / 2, -h / 2);
-      ctx.lineTo(0, -h / 2 - cs * 0.12);
-      ctx.lineTo(w / 2, -h / 2);
-      ctx.stroke();
-      break;
-    }
-    case 'stairs': {
-      ctx.strokeStyle = '#3a362c';
-      for (let i = 0; i < 4; i++) {
-        const o = -cs * 0.3 + i * cs * 0.2;
-        ctx.beginPath();
-        ctx.moveTo(-cs * 0.3, o);
-        ctx.lineTo(cs * 0.3, o);
-        ctx.stroke();
-      }
-      break;
-    }
-    case 'bed': {
-      ctx.fillStyle = '#6b4c38';
-      ctx.strokeStyle = '#3a2a1c';
-      ctx.fillRect(-cs * 0.35, -cs * 0.3, cs * 0.7, cs * 0.6);
-      ctx.strokeRect(-cs * 0.35, -cs * 0.3, cs * 0.7, cs * 0.6);
-      ctx.fillStyle = '#c9bda2';
-      ctx.fillRect(-cs * 0.3, -cs * 0.26, cs * 0.6, cs * 0.16);
-      break;
-    }
-    case 'bookshelf': {
-      ctx.fillStyle = '#4a3624';
-      ctx.strokeStyle = '#2a1c10';
-      ctx.fillRect(-cs * 0.35, -cs * 0.3, cs * 0.7, cs * 0.6);
-      ctx.strokeRect(-cs * 0.35, -cs * 0.3, cs * 0.7, cs * 0.6);
-      ctx.fillStyle = '#7c1f1f';
-      for (let i = -2; i <= 2; i++) ctx.fillRect(i * cs * 0.12 - cs * 0.02, -cs * 0.25, cs * 0.05, cs * 0.5);
-      break;
-    }
-    case 'table': {
-      ctx.fillStyle = '#6b4c38';
-      ctx.strokeStyle = '#3a2a1c';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, cs * 0.32, cs * 0.22, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      break;
-    }
-    case 'hearth': {
-      ctx.fillStyle = '#4a3624';
-      ctx.beginPath();
-      ctx.arc(0, cs * 0.1, cs * 0.3, Math.PI, 0);
-      ctx.fill();
-      ctx.fillStyle = '#a53434';
-      ctx.beginPath();
-      ctx.moveTo(0, -cs * 0.05);
-      ctx.lineTo(-cs * 0.08, cs * 0.12);
-      ctx.lineTo(cs * 0.08, cs * 0.12);
-      ctx.closePath();
-      ctx.fill();
-      break;
-    }
-    case 'desk': {
-      ctx.fillStyle = '#5a3f2c';
-      ctx.strokeStyle = '#2a1c10';
-      ctx.fillRect(-cs * 0.32, -cs * 0.2, cs * 0.64, cs * 0.4);
-      ctx.strokeRect(-cs * 0.32, -cs * 0.2, cs * 0.64, cs * 0.4);
-      ctx.beginPath();
-      ctx.moveTo(0, -cs * 0.2);
-      ctx.lineTo(0, cs * 0.2);
-      ctx.stroke();
-      break;
-    }
-    case 'crate': {
-      ctx.fillStyle = '#5a4630';
-      ctx.strokeStyle = '#2a1c10';
-      ctx.fillRect(-cs * 0.28, -cs * 0.28, cs * 0.56, cs * 0.56);
-      ctx.strokeRect(-cs * 0.28, -cs * 0.28, cs * 0.56, cs * 0.56);
-      ctx.beginPath();
-      ctx.moveTo(-cs * 0.28, -cs * 0.28); ctx.lineTo(cs * 0.28, cs * 0.28);
-      ctx.moveTo(cs * 0.28, -cs * 0.28); ctx.lineTo(-cs * 0.28, cs * 0.28);
-      ctx.stroke();
-      break;
-    }
-    case 'sigil': {
-      ctx.strokeStyle = '#7c1f1f';
-      ctx.beginPath();
-      ctx.arc(0, 0, cs * 0.32, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      for (let i = 0; i <= 3; i++) {
-        const a = (i / 3) * Math.PI * 2 - Math.PI / 2;
-        const px2 = Math.cos(a) * cs * 0.28, py2 = Math.sin(a) * cs * 0.28;
-        if (i === 0) ctx.moveTo(px2, py2); else ctx.lineTo(px2, py2);
-      }
-      ctx.closePath();
-      ctx.stroke();
-      break;
-    }
-    case 'disturbed': {
-      ctx.strokeStyle = '#3a2c1c';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, cs * 0.4, cs * 0.22, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      for (let i = 0; i < 5; i++) {
-        const a = (i / 5) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * cs * 0.15, Math.sin(a) * cs * 0.1);
-        ctx.lineTo(Math.cos(a) * cs * 0.32, Math.sin(a) * cs * 0.2);
-        ctx.stroke();
-      }
-      break;
-    }
-    case 'well': {
-      ctx.fillStyle = '#8f8a78';
-      ctx.strokeStyle = '#3a362c';
-      ctx.beginPath();
-      ctx.arc(0, 0, cs * 0.26, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(-cs * 0.2, -cs * 0.05); ctx.lineTo(cs * 0.2, -cs * 0.05);
-      ctx.moveTo(-cs * 0.14, cs * 0.14); ctx.lineTo(cs * 0.14, cs * 0.14);
-      ctx.stroke();
-      break;
-    }
-  }
-  ctx.restore();
-}
-
-function drawDoorGlyph(ctx, x, y, cs, palette) {
-  const px = x * cs, py = y * cs;
-  ctx.fillStyle = palette.door;
-  ctx.strokeStyle = palette.ink;
-  ctx.lineWidth = 1;
-  const m = cs * 0.16;
-  ctx.fillRect(px + m, py + m, cs - 2 * m, cs - 2 * m);
-  ctx.strokeRect(px + m, py + m, cs - 2 * m, cs - 2 * m);
-  ctx.beginPath();
-  ctx.moveTo(px + m, py + cs - m);
-  ctx.lineTo(px + cs - m, py + m);
-  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-  ctx.stroke();
-}
-
-function drawCompass(ctx, x, y, r) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.strokeStyle = 'rgba(217,207,184,0.55)';
-  ctx.fillStyle = 'rgba(217,207,184,0.55)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(0, -r); ctx.lineTo(-r * 0.28, r * 0.4); ctx.lineTo(0, r * 0.15); ctx.lineTo(r * 0.28, r * 0.4);
-  ctx.closePath();
-  ctx.fill();
-  ctx.font = `${r * 0.7}px Georgia, serif`;
-  ctx.textAlign = 'center';
-  ctx.fillText('N', 0, -r - 4);
-  ctx.restore();
-}
-
-function drawThreatMarker(ctx, x, y, number, cs) {
-  const px = (x + 0.5) * cs, py = (y + 0.5) * cs;
-  ctx.save();
-  ctx.translate(px, py);
-  ctx.fillStyle = 'rgba(165,52,52,0.94)';
-  ctx.strokeStyle = '#20090a';
-  ctx.lineWidth = 1.5;
-  const spikes = 8, outerR = cs * 0.36, innerR = cs * 0.2;
-  ctx.beginPath();
-  for (let k = 0; k < spikes * 2; k++) {
-    const ang = (k / (spikes * 2)) * Math.PI * 2;
-    const r = k % 2 === 0 ? outerR : innerR;
-    const xx = Math.cos(ang) * r, yy = Math.sin(ang) * r;
-    if (k === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
-  }
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = '#fdf3e2';
-  ctx.font = `bold ${Math.round(cs * 0.42)}px Georgia, serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(String(number), 0, 1);
-  ctx.restore();
-}
-
-function renderMap(canvas, map, cellSize) {
-  const { cols, rows, grid, features, mapType } = map;
-  const palette = PALETTES[mapType];
-  const dpr = Math.min(window.devicePixelRatio || 1, 3); // headroom for pinch-zoom past 1:1
-  const wPx = cols * cellSize, hPx = rows * cellSize;
-  canvas.width = Math.round(wPx * dpr);
-  canvas.height = Math.round(hPx * dpr);
-  canvas.style.width = wPx + 'px';
-  canvas.style.height = hPx + 'px';
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, wPx, hPx);
-
-  const hasDepth = mapType === 'cave' || mapType === 'crypt';
-  const dist = hasDepth ? bfsDistance(grid, cols, rows, v => v !== WALL) : null;
-
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      const t = grid[idx(cols, x, y)];
-      const px = x * cellSize, py = y * cellSize;
-      let color;
-      if (t === WALL) {
-        if (hasDepth) {
-          const d = dist[idx(cols, x, y)];
-          const tt = d < 0 ? 1 : Math.min(1, d / 6);
-          color = mixColor(palette.wallNear, palette.wallFar, tt);
-        } else {
-          color = palette.wall;
-        }
-      } else if (t === WATER) {
-        color = hash2(x, y) < 50 ? palette.water : palette.waterAlt;
-      } else if (t === PATH) {
-        color = hash2(x, y) < 50 ? palette.path : palette.pathAlt;
-      } else if (t === DOOR) {
-        color = (mapType === 'graveyard' || mapType === 'village') ? palette.ground : palette.floor;
-      } else {
-        color = (mapType === 'graveyard' || mapType === 'village')
-          ? (hash2(x, y) < 50 ? palette.ground : palette.groundAlt)
-          : (hash2(x, y) < 50 ? palette.floor : palette.floorAlt);
-      }
-      ctx.fillStyle = color;
-      ctx.fillRect(px, py, cellSize, cellSize);
-    }
-  }
-
-  ctx.strokeStyle = palette.ink;
-  ctx.lineWidth = Math.max(1.5, cellSize * 0.09);
-  ctx.beginPath();
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      const t = grid[idx(cols, x, y)];
-      if (isSolid(t)) continue;
-      const px = x * cellSize, py = y * cellSize;
-      const solidAt = (nx, ny) => !inBounds(cols, rows, nx, ny) || isSolid(grid[idx(cols, nx, ny)]);
-      if (solidAt(x, y - 1)) { ctx.moveTo(px, py); ctx.lineTo(px + cellSize, py); }
-      if (solidAt(x, y + 1)) { ctx.moveTo(px, py + cellSize); ctx.lineTo(px + cellSize, py + cellSize); }
-      if (solidAt(x - 1, y)) { ctx.moveTo(px, py); ctx.lineTo(px, py + cellSize); }
-      if (solidAt(x + 1, y)) { ctx.moveTo(px + cellSize, py); ctx.lineTo(px + cellSize, py + cellSize); }
-    }
-  }
-  ctx.stroke();
-
-  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
-    if (grid[idx(cols, x, y)] === DOOR) drawDoorGlyph(ctx, x, y, cellSize, palette);
-  }
-
-  for (const f of features) drawFeature(ctx, f, cellSize);
-
-  ctx.strokeStyle = 'rgba(217,207,184,0.7)';
-  ctx.lineWidth = 4;
-  ctx.strokeRect(2, 2, wPx - 4, hPx - 4);
-  ctx.lineWidth = 1;
-  ctx.strokeRect(8, 8, wPx - 16, hPx - 16);
-  drawCompass(ctx, wPx - 34, 34, 16);
-}
-
-/* ---------------------------------------------------------------------
- * Lurking threats — blank, Keeper-authored markers. The Keeper arms
- * placement with #addThreatBtn and clicks the map to drop a numbered
- * marker (click an existing one, or its ✕ in the sidebar, to remove
- * it). Every marker opens as an empty Call of Cthulhu 7th-edition-style
- * stat block: real characteristic fields (STR/CON/SIZ/DEX/APP/INT/POW/
- * EDU) with HP, Magic Points, and Damage Bonus/Build computed live from
- * whatever numbers the Keeper types in, using the standard 7e formulas
- * below. Nothing about a specific creature is pre-written — this tool
- * generates the *map*, never the monster or the story behind it; see
- * CLAUDE.md before adding any named creature or flavor text back in.
- * ------------------------------------------------------------------- */
-const STAT_FIELDS = ['str', 'con', 'siz', 'dex', 'app', 'int', 'pow', 'edu'];
-
-function blankThreat(x, y) {
-  const stats = {};
-  for (const f of STAT_FIELDS) stats[f] = '';
-  return { x, y, name: '', stats, move: '', armor: '', attacks: '', skills: '', sanLoss: '', notes: '' };
-}
-
-/* ---------------------------------------------------------------------
- * Saved threats — a small local library of stat blocks the Keeper has
- * already filled in once (e.g. "Deep One Hybrid," "Cultist"), stored in
- * localStorage so the same creature can be dropped onto any map without
- * retyping its stats. Purely a convenience cache of the Keeper's own
- * entries — nothing here is pre-populated or generated.
- * ------------------------------------------------------------------- */
-const SAVED_THREATS_KEY = 'eldritchCartographer.savedThreats';
-
-function loadSavedThreats() {
-  try {
-    const raw = localStorage.getItem(SAVED_THREATS_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch (e) {
-    return {};
-  }
-}
-function persistSavedThreats() {
-  try { localStorage.setItem(SAVED_THREATS_KEY, JSON.stringify(savedThreats)); } catch (e) { /* storage unavailable — keep going in-memory */ }
-}
-
-function threatFromTemplate(x, y, template) {
-  const base = blankThreat(x, y);
-  if (!template) return base;
-  base.name = template.name || '';
-  base.stats = { ...base.stats, ...template.stats };
-  base.move = template.move || '';
-  base.armor = template.armor || '';
-  base.attacks = template.attacks || '';
-  base.skills = template.skills || '';
-  base.sanLoss = template.sanLoss || '';
-  base.notes = template.notes || '';
-  return base;
-}
-
-// STR+SIZ -> [Damage Bonus display, Build] per the CoC 7e core rulebook table.
-function dbBuildFromStrSiz(sum) {
-  if (sum <= 64) return ['-2', -2];
-  if (sum <= 84) return ['-1', -1];
-  if (sum <= 124) return ['0', 0];
-  if (sum <= 164) return ['+1D4', 1];
-  if (sum <= 204) return ['+1D6', 2];
-  if (sum <= 284) return ['+2D6', 3];
-  if (sum <= 364) return ['+3D6', 4];
-  if (sum <= 444) return ['+4D6', 5];
-  const extraSteps = Math.ceil((sum - 444) / 80);
-  return [`+${4 + extraSteps}D6`, 5 + extraSteps];
-}
-
-function computeDerived(stats) {
-  const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
-  const con = num(stats.con), siz = num(stats.siz), pow = num(stats.pow), str = num(stats.str);
-  const hp = (con !== null && siz !== null) ? Math.floor((con + siz) / 10) : null;
-  const mp = (pow !== null) ? Math.floor(pow / 5) : null;
-  let db = null, build = null;
-  if (str !== null && siz !== null) [db, build] = dbBuildFromStrSiz(str + siz);
-  return { hp, mp, db, build };
-}
-
-/* ---------------------------------------------------------------------
- * Saved locations — a whole prepped map (title, Keeper Notes, every
- * room's notes, every placed threat's stat block), saved by name to
- * localStorage. Unlike everything else on this page, a saved location
- * survives switching map type, hitting Generate, or reloading the page —
- * it's the thing that makes "prep once, glance at it during the session"
- * actually true across more than one location at a time. Stores a full
- * snapshot rather than a seed to replay later: this generator's
- * algorithms will keep changing, and replaying an old seed after a
- * future code change could silently regenerate different geometry,
- * desyncing room notes (matched by index) and threat marker positions.
- * A snapshot always reloads pixel-identical to what was saved.
- * ------------------------------------------------------------------- */
-const SAVED_LOCATIONS_KEY = 'eldritchCartographer.savedLocations';
-
-function loadSavedLocations() {
-  try {
-    const raw = localStorage.getItem(SAVED_LOCATIONS_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch (e) {
-    return {};
-  }
-}
-function persistSavedLocations() {
-  try { localStorage.setItem(SAVED_LOCATIONS_KEY, JSON.stringify(savedLocations)); } catch (e) { /* storage unavailable — keep going in-memory */ }
-}
-
-function hasUnsavedContent() {
-  if (!currentMap) return false;
-  if (currentMap.notes && currentMap.notes.trim()) return true;
-  if (currentMap.rooms.some(r => r.notes && r.notes.trim())) return true;
-  if (placedThreats.length) return true;
-  return false;
-}
-function confirmDiscardIfNeeded() {
-  if (!hasUnsavedContent()) return true;
-  return window.confirm("This map has notes or threats that aren't saved as a Location — Generate will discard them. Continue?");
-}
-
-/* ---------------------------------------------------------------------
- * App wiring
- * ------------------------------------------------------------------- */
-const SIZES = {
-  small: { cols: 36, rows: 26 },
-  medium: { cols: 48, rows: 34 },
-  large: { cols: 60, rows: 42 },
-};
-const GENERATORS = { cave: generateCave, mansion: generateMansion, crypt: generateCrypt, graveyard: generateGraveyard, village: generateVillage };
-const ROOM_HEADINGS = { mansion: 'Rooms & Chambers', crypt: 'Rooms & Chambers', graveyard: 'Rooms & Chambers', village: 'Village Locations' };
-const CELL_SIZE = 18;
-
-const state = { type: 'cave' };
-let currentMap = null;
-let placedThreats = [];
-let savedThreats = loadSavedThreats();
-let savedLocations = loadSavedLocations();
-
-const canvas = document.getElementById('mapCanvas');
-const canvasWrap = document.querySelector('.canvas-wrap');
-const seedInput = document.getElementById('seedInput');
-const sizeSelect = document.getElementById('sizeSelect');
-const typeGroup = document.getElementById('typeGroup');
-const savedLocationSelect = document.getElementById('savedLocationSelect');
-const loadLocationBtn = document.getElementById('loadLocationBtn');
-const deleteLocationBtn = document.getElementById('deleteLocationBtn');
-const saveLocationBtn = document.getElementById('saveLocationBtn');
-const titleInput = document.getElementById('mapTitleInput');
-const flavorEl = document.getElementById('mapFlavor');
-const mapNotesEl = document.getElementById('mapNotes');
-const keyListEl = document.getElementById('keyList');
-const roomListEl = document.getElementById('roomList');
-const roomsHeadingEl = document.getElementById('roomsHeading');
-const threatListEl = document.getElementById('threatList');
-const addThreatBtn = document.getElementById('addThreatBtn');
-const savedThreatSelect = document.getElementById('savedThreatSelect');
-const deleteSavedBtn = document.getElementById('deleteSavedBtn');
-const showThreatsToggle = document.getElementById('showThreatsToggle');
-const clearThreatsBtn = document.getElementById('clearThreatsBtn');
-const footerEl = document.getElementById('footerText');
-
-let placingThreat = false;
-
-/* ---------------------------------------------------------------------
- * Map viewer — pinch-zoom and drag-pan for the canvas, independent of
- * the page's own zoom. Needed because this runs mostly as a phone-in-
- * hand tool at the table (Safari/iOS first) where a map wider than the
- * screen has to be something you can pinch into, not just scroll.
- * The canvas itself is never re-drawn for this — it's a CSS
- * translate+scale transform on the existing bitmap, so cellFromEvent's
- * getBoundingClientRect()-based math keeps working unchanged at any
- * zoom level (the browser reports the transformed box).
- * ------------------------------------------------------------------- */
-const MIN_SCALE = 0.4, MAX_SCALE = 5;
-let view = { scale: 1, x: 0, y: 0 };
-let touchState = null;
-let dragState = null;
-
-function applyView() {
-  canvas.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
-}
-
-function clampScale(s) { return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s)); }
-
-// Zoom while keeping the point at (px, py) — in canvasWrap-local
-// coordinates — visually stationary under the fingers/cursor.
-function zoomAt(px, py, factor, fromScale, fromX, fromY) {
-  const newScale = clampScale(fromScale * factor);
-  const ratio = newScale / fromScale;
-  view.scale = newScale;
-  view.x = px - (px - fromX) * ratio;
-  view.y = py - (py - fromY) * ratio;
-  applyView();
-}
-
-// Fit the whole map into the visible wrap on load/regenerate/resize —
-// never auto-zooms in past 1:1, only ever shrinks an oversized map
-// down to fit (a phone screen is almost always narrower than a
-// Medium/Large map at native cell size).
-function fitView() {
-  if (!currentMap) return;
-  const rect = canvasWrap.getBoundingClientRect();
-  const wPx = currentMap.cols * CELL_SIZE, hPx = currentMap.rows * CELL_SIZE;
-  const innerW = rect.width - 32, innerH = rect.height - 32; // minus wrap padding
-  const fitScale = Math.min(innerW / wPx, innerH / hPx, 1);
-  view.scale = clampScale(fitScale);
-  view.x = (rect.width - wPx * view.scale) / 2;
-  view.y = (rect.height - hPx * view.scale) / 2;
-  applyView();
-}
-
-canvasWrap.addEventListener('touchstart', (e) => {
-  if (e.touches.length === 2) {
-    const [t1, t2] = e.touches;
-    const rect = canvasWrap.getBoundingClientRect();
-    touchState = {
-      mode: 'pinch',
-      startDist: Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY),
-      startScale: view.scale,
-      startX: view.x, startY: view.y,
-      midX: (t1.clientX + t2.clientX) / 2 - rect.left,
-      midY: (t1.clientY + t2.clientY) / 2 - rect.top,
-    };
-  } else if (e.touches.length === 1) {
-    touchState = { mode: 'pan', lastX: e.touches[0].clientX, lastY: e.touches[0].clientY };
-  }
-}, { passive: true });
-
-canvasWrap.addEventListener('touchmove', (e) => {
-  if (!touchState) return;
-  if (touchState.mode === 'pinch' && e.touches.length === 2) {
-    e.preventDefault();
-    const [t1, t2] = e.touches;
-    const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-    zoomAt(touchState.midX, touchState.midY, dist / touchState.startDist, touchState.startScale, touchState.startX, touchState.startY);
-  } else if (touchState.mode === 'pan' && e.touches.length === 1) {
-    e.preventDefault();
-    const t = e.touches[0];
-    view.x += t.clientX - touchState.lastX;
-    view.y += t.clientY - touchState.lastY;
-    touchState.lastX = t.clientX;
-    touchState.lastY = t.clientY;
-    applyView();
-  }
-}, { passive: false });
-
-function endTouch(e) {
-  if (e.touches.length === 0) touchState = null;
-  else if (e.touches.length === 1) touchState = { mode: 'pan', lastX: e.touches[0].clientX, lastY: e.touches[0].clientY };
-}
-canvasWrap.addEventListener('touchend', endTouch);
-canvasWrap.addEventListener('touchcancel', () => { touchState = null; });
-
-canvasWrap.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  const rect = canvasWrap.getBoundingClientRect();
-  const factor = Math.exp(-e.deltaY * 0.0015);
-  zoomAt(e.clientX - rect.left, e.clientY - rect.top, factor, view.scale, view.x, view.y);
-}, { passive: false });
-
-canvasWrap.addEventListener('mousedown', (e) => {
-  dragState = { moved: false, startX: e.clientX, startY: e.clientY, viewX: view.x, viewY: view.y };
-  canvasWrap.classList.add('grabbing');
-});
-window.addEventListener('mousemove', (e) => {
-  if (!dragState) return;
-  const dx = e.clientX - dragState.startX, dy = e.clientY - dragState.startY;
-  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragState.moved = true;
-  if (dragState.moved) {
-    view.x = dragState.viewX + dx;
-    view.y = dragState.viewY + dy;
-    applyView();
-  }
-});
-window.addEventListener('mouseup', () => {
-  canvasWrap.classList.remove('grabbing');
-  if (dragState && !dragState.moved) dragState = null;
-});
-window.addEventListener('resize', () => fitView());
-
-const ADJ = ["Whispering", "Hollow", "Forgotten", "Shrouded", "Withered", "Silent", "Drowned", "Gnarled", "Pale", "Nameless"];
-const NOUN = ["Hollow", "Reach", "Fen", "Barrow", "Hollowgate", "Mire", "Cairn", "Vault", "Thicket", "Passage"];
-function randomSeedWord(rng) {
-  return `${ADJ[Math.floor(rng() * ADJ.length)]}-${NOUN[Math.floor(rng() * NOUN.length)]}-${Math.floor(rng() * 90 + 10)}`;
-}
-
-function setPlacingThreat(on) {
-  placingThreat = on;
-  addThreatBtn.classList.toggle('active', on);
-  canvas.style.cursor = on ? 'crosshair' : 'default';
-}
-
-function cellFromEvent(e) {
-  const rect = canvas.getBoundingClientRect();
-  const gx = Math.floor((e.clientX - rect.left) / (rect.width / currentMap.cols));
-  const gy = Math.floor((e.clientY - rect.top) / (rect.height / currentMap.rows));
-  return { gx, gy };
-}
-
-function populateSavedThreatSelect() {
-  const previous = savedThreatSelect.value;
-  savedThreatSelect.innerHTML = '';
-  const blank = document.createElement('option');
-  blank.value = '';
-  blank.textContent = 'Blank threat';
-  savedThreatSelect.appendChild(blank);
-  Object.keys(savedThreats).sort((a, b) => a.localeCompare(b)).forEach(name => {
-    const opt = document.createElement('option');
-    opt.value = name;
-    opt.textContent = name;
-    savedThreatSelect.appendChild(opt);
-  });
-  savedThreatSelect.value = savedThreats[previous] ? previous : '';
-}
-
-function saveThreatAsTemplate(threat) {
-  const suggested = threat.name.trim() || 'Unnamed threat';
-  const input = window.prompt('Save this stat block for reuse as:', suggested);
-  if (input === null) return;
-  const name = input.trim();
-  if (!name) return;
-  if (savedThreats[name] && !window.confirm(`A saved threat named "${name}" already exists. Overwrite it?`)) return;
-  savedThreats[name] = {
-    name,
-    stats: { ...threat.stats },
-    move: threat.move, armor: threat.armor, attacks: threat.attacks,
-    skills: threat.skills, sanLoss: threat.sanLoss, notes: threat.notes,
-  };
-  persistSavedThreats();
-  populateSavedThreatSelect();
-  savedThreatSelect.value = name;
-}
-
-const STAT_LABELS = { str: 'STR', con: 'CON', siz: 'SIZ', dex: 'DEX', app: 'APP', int: 'INT', pow: 'POW', edu: 'EDU' };
-
-function buildThreatCard(threat, index) {
-  const li = document.createElement('li');
-  const card = document.createElement('div');
-  card.className = 'threat-card';
-
-  const head = document.createElement('div');
-  head.className = 'threat-card-head';
-  const number = document.createElement('span');
-  number.className = 'threat-number';
-  number.textContent = String(index + 1);
-  head.appendChild(number);
-  const nameInput = document.createElement('input');
-  nameInput.type = 'text';
-  nameInput.className = 'threat-name';
-  nameInput.placeholder = 'Name this threat';
-  nameInput.value = threat.name;
-  nameInput.addEventListener('input', () => { threat.name = nameInput.value; });
-  head.appendChild(nameInput);
-  const saveBtn = document.createElement('button');
-  saveBtn.type = 'button';
-  saveBtn.className = 'threat-icon-btn';
-  saveBtn.textContent = '💾';
-  saveBtn.title = 'Save this stat block for reuse';
-  saveBtn.addEventListener('click', () => saveThreatAsTemplate(threat));
-  head.appendChild(saveBtn);
-  const removeBtn = document.createElement('button');
-  removeBtn.type = 'button';
-  removeBtn.className = 'threat-icon-btn';
-  removeBtn.textContent = '✕';
-  removeBtn.title = 'Remove this marker';
-  removeBtn.addEventListener('click', () => { placedThreats.splice(index, 1); redraw(); });
-  head.appendChild(removeBtn);
-  card.appendChild(head);
-
-  const statGrid = document.createElement('div');
-  statGrid.className = 'stat-grid';
-  const derivedRow = document.createElement('div');
-  derivedRow.className = 'derived-row';
-  const refreshDerived = () => {
-    const d = computeDerived(threat.stats);
-    derivedRow.innerHTML = '';
-    const parts = [
-      ['HP', d.hp === null ? '—' : d.hp],
-      ['MP', d.mp === null ? '—' : d.mp],
-      ['DB', d.db === null ? '—' : d.db],
-      ['Build', d.build === null ? '—' : d.build],
-    ];
-    parts.forEach(([label, val], i) => {
-      if (i > 0) derivedRow.appendChild(document.createTextNode('   '));
-      const strong = document.createElement('strong');
-      strong.textContent = String(val);
-      derivedRow.appendChild(document.createTextNode(label + ' '));
-      derivedRow.appendChild(strong);
-    });
-  };
-  for (const f of STAT_FIELDS) {
-    const field = document.createElement('div');
-    field.className = 'stat-field';
-    const label = document.createElement('span');
-    label.textContent = STAT_LABELS[f];
-    field.appendChild(label);
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.value = threat.stats[f];
-    input.addEventListener('input', () => { threat.stats[f] = input.value; refreshDerived(); });
-    field.appendChild(input);
-    statGrid.appendChild(field);
-  }
-  card.appendChild(statGrid);
-  refreshDerived();
-  card.appendChild(derivedRow);
-
-  const makeField = (labelText, value, multiline, onInput) => {
-    const row = document.createElement('label');
-    row.className = 'field-row';
-    row.appendChild(document.createTextNode(labelText));
-    const field = document.createElement(multiline ? 'textarea' : 'input');
-    if (!multiline) field.type = 'text';
-    field.value = value;
-    field.addEventListener('input', () => onInput(field.value));
-    row.appendChild(field);
-    card.appendChild(row);
-  };
-  makeField('Move', threat.move, false, v => { threat.move = v; });
-  makeField('Armor', threat.armor, false, v => { threat.armor = v; });
-  makeField('Attacks', threat.attacks, true, v => { threat.attacks = v; });
-  makeField('Skills', threat.skills, true, v => { threat.skills = v; });
-  makeField('Sanity Loss', threat.sanLoss, false, v => { threat.sanLoss = v; });
-  makeField('Notes', threat.notes, true, v => { threat.notes = v; });
-
-  li.appendChild(card);
-  return li;
-}
-
-function updateThreatList() {
-  threatListEl.innerHTML = '';
-  if (!placedThreats.length) {
-    const li = document.createElement('li');
-    li.className = 'empty';
-    li.textContent = 'None placed yet.';
-    threatListEl.appendChild(li);
-    return;
-  }
-  placedThreats.forEach((t, i) => threatListEl.appendChild(buildThreatCard(t, i)));
-}
-
-function redraw() {
-  renderMap(canvas, currentMap, CELL_SIZE);
-  if (showThreatsToggle.checked) {
-    const ctx = canvas.getContext('2d');
-    placedThreats.forEach((t, i) => drawThreatMarker(ctx, t.x, t.y, i + 1, CELL_SIZE));
-  }
-  updateThreatList();
-}
-
-function populateSavedLocationSelect() {
-  const previous = savedLocationSelect.value;
-  savedLocationSelect.innerHTML = '';
-  const names = Object.keys(savedLocations).sort((a, b) => (savedLocations[b].savedAt || 0) - (savedLocations[a].savedAt || 0));
-  if (!names.length) {
-    const opt = document.createElement('option');
-    opt.value = '';
-    opt.textContent = '— no saved locations —';
-    savedLocationSelect.appendChild(opt);
-  } else {
-    for (const name of names) {
-      const opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = name;
-      savedLocationSelect.appendChild(opt);
-    }
-  }
-  savedLocationSelect.value = savedLocations[previous] ? previous : (names[0] || '');
-}
-
-function saveCurrentLocation() {
-  if (!currentMap) return;
-  const suggested = currentMap.title.trim() || 'Unnamed location';
-  const input = window.prompt('Save this location as:', suggested);
-  if (input === null) return;
-  const name = input.trim();
-  if (!name) return;
-  if (savedLocations[name] && !window.confirm(`A saved location named "${name}" already exists. Overwrite it?`)) return;
-  savedLocations[name] = {
-    savedAt: Date.now(),
-    seed: seedInput.value,
-    size: sizeSelect.value,
-    map: {
-      cols: currentMap.cols,
-      rows: currentMap.rows,
-      grid: Array.from(currentMap.grid),
-      features: currentMap.features,
-      rooms: currentMap.rooms,
-      mapType: currentMap.mapType,
-      title: currentMap.title,
-      flavor: currentMap.flavor,
-      key: currentMap.key,
-      notes: currentMap.notes,
-    },
-    placedThreats: placedThreats.map(t => ({ ...t, stats: { ...t.stats } })),
-  };
-  persistSavedLocations();
-  populateSavedLocationSelect();
-  savedLocationSelect.value = name;
-}
-
-function loadLocation(name) {
-  const entry = savedLocations[name];
-  if (!entry) return;
-  if (!confirmDiscardIfNeeded()) return;
-  const m = entry.map;
-  currentMap = {
-    cols: m.cols,
-    rows: m.rows,
-    grid: Uint8Array.from(m.grid),
-    features: m.features,
-    rooms: m.rooms,
-    mapType: m.mapType,
-    title: m.title,
-    flavor: m.flavor,
-    key: m.key,
-    notes: m.notes,
-  };
-  placedThreats = entry.placedThreats.map(t => ({ ...t, stats: { ...t.stats } }));
-  seedInput.value = entry.seed || '';
-  sizeSelect.value = entry.size || sizeSelect.value;
-  setActiveType(m.mapType);
-  setPlacingThreat(false);
-  updateSidebar(currentMap, seedInput.value.trim() || 'eldritch');
-  redraw();
-  fitView();
-}
-
-function setActiveType(type) {
-  state.type = type;
-  for (const btn of typeGroup.querySelectorAll('.type-btn')) {
-    btn.classList.toggle('active', btn.dataset.type === type);
-  }
-}
-
-function regenerate() {
-  if (!confirmDiscardIfNeeded()) return;
-  const seedStr = seedInput.value.trim() || 'eldritch';
-  const rng = makeRng(seedStr + '::' + state.type);
-  const { cols, rows } = SIZES[sizeSelect.value];
-  const gen = GENERATORS[state.type];
-  currentMap = gen(cols, rows, rng);
-  currentMap.notes = '';
-  for (const room of currentMap.rooms) room.notes = '';
-  placedThreats = [];
-  setPlacingThreat(false);
-  updateSidebar(currentMap, seedStr);
-  redraw();
-  fitView();
-}
-
-function updateSidebar(map, seedStr) {
-  titleInput.value = map.title;
-  flavorEl.textContent = map.flavor;
-  mapNotesEl.value = map.notes;
-  keyListEl.innerHTML = '';
-  for (const item of map.key) {
-    const li = document.createElement('li');
-    if (item.color) {
-      const sw = document.createElement('span');
-      sw.className = 'swatch';
-      sw.style.background = item.color;
-      li.appendChild(sw);
-    } else {
-      const sw = document.createElement('span');
-      sw.className = 'swatch';
-      sw.style.background = 'transparent';
-      sw.style.border = '1px solid #8f8570';
-      li.appendChild(sw);
-    }
-    const label = document.createElement('span');
-    label.textContent = item.label;
-    li.appendChild(label);
-    keyListEl.appendChild(li);
-  }
-  roomListEl.innerHTML = '';
-  if (map.rooms && map.rooms.length) {
-    roomsHeadingEl.textContent = ROOM_HEADINGS[map.mapType] || 'Rooms & Chambers';
-    roomsHeadingEl.style.display = '';
-    for (const room of map.rooms) {
-      const li = document.createElement('li');
-      if (room.secret) li.classList.add('secret');
-      const entry = document.createElement('div');
-      entry.className = 'room-entry';
-      const labelSpan = document.createElement('span');
-      labelSpan.className = 'room-label';
-      labelSpan.textContent = room.label;
-      entry.appendChild(labelSpan);
-      const notesArea = document.createElement('textarea');
-      notesArea.className = 'room-notes';
-      notesArea.placeholder = 'Notes...';
-      notesArea.value = room.notes || '';
-      notesArea.addEventListener('input', () => { room.notes = notesArea.value; });
-      entry.appendChild(notesArea);
-      li.appendChild(entry);
-      roomListEl.appendChild(li);
-    }
-  } else {
-    roomsHeadingEl.style.display = 'none';
-  }
-  footerEl.textContent = `seed: ${seedStr}  ·  type: ${map.mapType}  ·  size: ${sizeSelect.value}`;
-}
-
-typeGroup.addEventListener('click', (e) => {
-  const btn = e.target.closest('.type-btn');
-  if (!btn) return;
-  setActiveType(btn.dataset.type);
-  regenerate();
-});
-document.getElementById('generateBtn').addEventListener('click', regenerate);
-sizeSelect.addEventListener('change', regenerate);
-document.getElementById('randomizeBtn').addEventListener('click', () => {
-  const rng = mulberry32((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0);
-  seedInput.value = randomSeedWord(rng);
-  regenerate();
-});
-titleInput.addEventListener('input', () => { if (currentMap) currentMap.title = titleInput.value; });
-mapNotesEl.addEventListener('input', () => { if (currentMap) currentMap.notes = mapNotesEl.value; });
-saveLocationBtn.addEventListener('click', saveCurrentLocation);
-loadLocationBtn.addEventListener('click', () => {
-  const name = savedLocationSelect.value;
-  if (!name) return;
-  loadLocation(name);
-});
-deleteLocationBtn.addEventListener('click', () => {
-  const name = savedLocationSelect.value;
-  if (!name) return;
-  if (!window.confirm(`Delete saved location "${name}"? This can't be undone.`)) return;
-  delete savedLocations[name];
-  persistSavedLocations();
-  populateSavedLocationSelect();
-});
-addThreatBtn.addEventListener('click', () => setPlacingThreat(!placingThreat));
-deleteSavedBtn.addEventListener('click', () => {
-  const name = savedThreatSelect.value;
-  if (!name) return;
-  if (!window.confirm(`Delete saved threat "${name}"? This can't be undone.`)) return;
-  delete savedThreats[name];
-  persistSavedThreats();
-  populateSavedThreatSelect();
-});
-showThreatsToggle.addEventListener('change', redraw);
-clearThreatsBtn.addEventListener('click', () => { placedThreats = []; redraw(); });
-canvas.addEventListener('click', (e) => {
-  if (dragState) { dragState = null; return; }
-  if (!currentMap) return;
-  const { gx, gy } = cellFromEvent(e);
-  if (!inBounds(currentMap.cols, currentMap.rows, gx, gy)) return;
-  const existingIdx = placedThreats.findIndex(p => p.x === gx && p.y === gy);
-  if (existingIdx >= 0) { placedThreats.splice(existingIdx, 1); redraw(); return; }
-  if (!placingThreat) return;
-  placedThreats.push(threatFromTemplate(gx, gy, savedThreats[savedThreatSelect.value]));
-  redraw();
-  const nameInputs = threatListEl.querySelectorAll('.threat-name');
-  const last = nameInputs[nameInputs.length - 1];
-  if (last) last.focus({ preventScroll: true });
-});
-document.getElementById('downloadBtn').addEventListener('click', () => {
-  if (!currentMap) return;
-  const link = document.createElement('a');
-  const safeTitle = currentMap.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
-  link.download = `${safeTitle}-${seedInput.value.trim() || 'seed'}.png`;
-  link.href = canvas.toDataURL('image/png');
-  link.click();
-});
-document.getElementById('resetViewBtn').addEventListener('click', fitView);
-
-(function init() {
-  const initRng = mulberry32((Date.now() ^ 0x9e3779b9) >>> 0);
-  seedInput.value = randomSeedWord(initRng);
-  populateSavedThreatSelect();
-  populateSavedLocationSelect();
-  setActiveType('cave');
-  regenerate();
-})();
-</script>
+<script src="src/rng.js"></script>
+<script src="src/cloud.js"></script>
+<script src="src/star.js"></script>
+<script src="src/disk.js"></script>
+<script src="src/planets.js"></script>
+<script src="src/system.js"></script>
+<script src="src/engine.js"></script>
+<script src="src/render.js"></script>
+<script src="src/app.js"></script>
+<!-- page:end -->
 </body>
 </html>

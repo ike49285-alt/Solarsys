@@ -1,162 +1,141 @@
-# Eldritch Cartographer
+# Solar Nebula
 
-A procedural map generator for **Call of Cthulhu** (and other Lovecraftian
-horror tabletop games), built as a single self-contained `index.html` —
-no install, no build step. Open the file in a browser, or serve it from
-GitHub Pages.
+A cloud of gas collapses into a star, a disk forms around it, planets
+grow in the disk, and the system ages for billions of years. You can
+poke it at every stage and watch what changes.
 
-**The generator's job stops at the map.** It draws terrain, rooms, and
-buildings, and labels each one with a generic type (Study, Ossuary,
-General Store, ...) — none of that is plot. Everything narrative — what's
-actually in a room, who a threat is and what its stats are, what the
-Keeper needs to remember about this location — is a blank field the
-Keeper fills in themselves, right on the map. Nothing here invents a
-storyline for you.
+Open `index.html` in a browser. It needs no install and no build step,
+and it runs on a phone. The simulation runs in a Web Worker and saves
+itself to the browser every 30 seconds, so a reload picks up where you
+left off.
 
-It generates five kinds of location, each with its own algorithm and
-visual style tuned to fit the trope:
+## What happens
 
-- **Cave** — cellular-automata cavern with organic walls, depth-shaded
-  rock, water pools, stalagmite clusters, and an occasional strange
-  carved idol tucked in a dead end.
-- **Mansion** — a BSP (binary space partition) room layout connected by
-  corridors and doors, with rooms auto-labeled (Study, Library, Cellar
-  Stair, ...) and simple furniture glyphs. A small chance of a locked or
-  hidden ritual room, flagged in the room list.
-- **Crypt** — a winding underground spine corridor with branching burial
-  chambers, sarcophagi, and a chance of a sealed vault that probably
-  shouldn't be opened.
-- **Graveyard** — a walled plot with a gate, gravel paths, scattered
-  headstones, a mausoleum or two, dead trees, and (usually) one freshly
-  disturbed grave.
-- **Village** — a winding main road and side lanes scattered with named
-  buildings (General Store, Sheriff's Office, Boarding House, a handful
-  of family residences, ...).
+1. **Cloud.** A dense core of gas 3000 AU across, about 1.5 solar masses,
+   slowly turning and stirred by turbulence, falls in on itself.
+2. **Protostar.** The centre gets dense enough to hold itself up, and a
+   protostar forms. Gas with too much spin to fall straight in starts to
+   circle it. Sometimes a second clump collapses on its own and makes a
+   binary.
+3. **Disk.** The gas settles into a spinning disk. A magnetised wind,
+   turbulence and the disk's own gravity carry gas inward onto the star,
+   and jets throw some of it back out.
+4. **Planets form.** Dust grows into pebbles. The pebbles drift toward
+   the star, and where they crowd together they collapse into
+   planetesimals. The first embryos sweep up planetesimals and pebbles.
+   Heavy cores pull in gas and become giants, which cut gaps in the disk.
+   Planets migrate inward and get caught in resonances.
+5. **Clearing.** The star's X-rays open a hole in the disk and eat it
+   away from the inside out. The gas is gone in a few million years.
+6. **Giant impacts.** Without gas to keep them apart, crowded planets
+   cross orbits, collide and scatter.
+7. **Mature.** The survivors settle into a long, quiet main-sequence
+   life.
+8. **Old age.** The star swells into a giant and swallows close planets,
+   and the rest drift outward as it sheds mass. In the end only a white
+   dwarf is left.
 
-Every map is seeded — the same seed + map type always produces the same
-layout, so a Keeper can save or share a seed string to regenerate a
-specific map later. The seed field accepts anything; the dice button
-rolls a themed random one (e.g. `Whispering-Hollow-41`).
+The world doesn't end there. Time goes on while the white dwarf cools
+toward a black dwarf, and the Gas tool can grow a new disk, and new
+planets, around the dead star.
 
-**Keeper Notes**: the map title is an editable field (rename it to your
-own town/house/vault), and there's a blank "Keeper Notes" box for the
-map as a whole. Every room, chamber, or building in the sidebar has its
-own blank notes textarea too — that's where the actual scenario lives:
-what's really in the General Store, why the Ossuary matters, what the
-party will find. It's all typed by you. By default it's tied to the map
-currently on screen and clears whenever you generate a new one — see
-**Saved Locations** below for keeping it around.
+## Things to fiddle with
 
-**Saved Locations**: click **💾 Save this location** to keep the whole
-prepped map — title, Keeper Notes, every room's notes, every placed
-threat's full stat block — under a name in the browser's local storage.
-The dropdown at the top of the sidebar lists everything you've saved
-(most recent first); **Load** brings one back exactly as you left it,
-on any map type, any time, even after closing the tab. If the current
-map has any notes or threats that aren't saved yet, hitting Generate
-(or switching type/size) asks before discarding them — save first if
-you want to keep it. 🗑 deletes whichever saved location is selected.
-This is what makes "prep a few locations ahead of a session" actually
-work: prep the Cave, save it, prep the Village, save it, and pull
-either back up mid-session without losing anything.
+**Tools in the cloud**
+- **Stir:** drag to push the gas the way you move.
+- **Pull:** hold a finger down and it pulls on the gas like a heavy star.
+- **Gas:** tap to add a puff of fresh gas.
+- **Blast:** tap off to one side and a supernova shock hits the cloud
+  from there.
 
-**Placing threats**: click **+ Threat** to arm placement, then click the
-map to drop a numbered marker; click a marker again (or its ✕ in the
-sidebar) to remove it. Each marker opens as a blank Call of Cthulhu 7th
-edition-style stat block — real characteristic fields (STR/CON/SIZ/DEX/
-APP/INT/POW/EDU), plus Move, Armor, Attacks, Skills, Sanity Loss, and
-Notes — with **HP, Magic Points, and Damage Bonus/Build calculated live**
-from whatever numbers you type in, using the actual 7e formulas. No
-creature names, flavor text, or stats are pre-written; this tool can't
-(and shouldn't) reproduce Chaosium's Malleus Monstrorum — the sheet
-structure and derived-stat math are just game mechanics, so filling in
-your own numbers gives you a real, correctly-computed stat block. The
-"Show markers" checkbox hides the marker overlay without losing what
-you've entered, so you can flip it off before sharing a clean copy of
-the map with players. Switching map type or generating a new layout
-clears placed markers, since their grid positions no longer apply.
+**Tools in the disk**
+- **Planet:** tap to place a Moon, an Earth, a Neptune or a Jupiter.
+- **Move:** drag a planet to a new orbit.
+- **Sweep:** drag to clear the gas and dust out of a band.
+- **Dust:** tap to scatter a ring of dust.
+- **Gas:** tap to pour a ring of fresh gas and dust into orbit. It
+  spreads into a new disk, even around a dead star.
+- **Flyby:** tap a distance, and another star passes that close.
 
-**Reusing a stat block**: hit 💾 on a filled-in threat card to save it
-by name (e.g. "Deep One Hybrid") — it's kept in the browser's local
-storage, so it's there next time you open the page, on any map. The
-dropdown next to **+ Threat** picks what a *new* marker starts from:
-leave it on "Blank threat," or pick a saved one to pre-fill everything
-(name, stats, attacks, all of it) the moment you place it, still fully
-editable per-marker afterward. 🗑 deletes whichever saved entry is
-currently selected in that dropdown.
+**Settings** (Settings tab): the cloud's mass, temperature, spin,
+turbulence and lumpiness, its magnetic field and metals; the disk's
+turbulence, wind, grain toughness, X-rays, migration strength and
+neighbourhood (alone, in a cluster, or near a massive star). Disk
+settings act at once; cloud settings take effect on the next cloud.
 
-## Using it
+**Views:** light, heat, and motion in the cloud; light, heat, dust and
+orbits in the disk. The Profile tab charts the disk's gas, dust,
+planetesimals and temperature against distance from the star.
 
-1. Open `index.html` in any modern browser (double-click it, or visit it
-   via GitHub Pages). Built to work first as a phone-in-hand tool at the
-   table in mobile Safari, not just at a desk.
-2. Pick a map type, a size (Small / Medium / Large), and optionally type
-   a seed.
-3. Click **Generate**. Click it again (or the dice) for a new location.
-4. **Download PNG** saves the current canvas as an image for use at the
-   table or in a VTT.
+**Speed:** at ×1 a whole system takes about half an hour. Most of that
+is the disk and the planets forming, the part you can play with. The quiet
+billions of years go quicker, and the clock slows again for the star's
+last giant phases. The slider runs from ×1/8 to ×64.
 
-**Zoom and pan**: the map loads fit to the screen, then it's yours to
-move around — pinch to zoom and drag with one finger on a touchscreen,
-or scroll/wheel to zoom and click-drag with a mouse. This is a viewer
-transform on top of the drawn map, independent of the browser's own
-page zoom, so it stays sharp and doesn't drag the header/sidebar along
-with it. **Reset View** snaps back to the initial fit-to-screen framing
-(also happens automatically on generate, and on rotating/resizing the
-window). Placing or removing a threat marker still lands on the exact
-grid cell under your finger/cursor at whatever zoom level you're at.
+**Skip** hurries on to the next stage, still showing it as it goes.
+Tap it again to stop.
 
-The sidebar shows the map's title, a short flavor line, a key explaining
-the symbols on the map, and — for mansions, crypts, graveyards, and
-villages — a list of the named rooms/buildings found, with hidden ones
-marked (`†`) so the Keeper can decide when (or whether) to reveal them.
+## The physics
 
-## How it's built
+- **Collapse:** smoothed particle hydrodynamics with Barnes–Hut
+  gravity, individual block time steps (Saitoh & Makino 2009) and sink
+  particles for protostars (Bate, Bonnell & Price 1995). The gas is
+  isothermal while thin and stiffens once dense. It is warmed by the
+  protostars' light.
+- **Disk:** a one-dimensional disk solved implicitly, with:
+  - viscous turbulence plus gravitational and magnetic instability;
+  - wind-driven accretion (Tabone et al. 2022);
+  - X-ray and external photoevaporation (Owen et al. 2012);
+  - two-population dust growth and drift (Birnstiel et al. 2012);
+  - the snow line;
+  - planetesimal formation (Lenz et al. 2019) and the streaming
+    instability.
+- **Planets:** orbit-averaged, with:
+  - oligarchic growth (Kokubo & Ida 2002; Ida & Lin 2004);
+  - pebble accretion (Lambrechts & Johansen 2014; Ormel 2017) up to the
+    pebble isolation mass (Bitsch et al. 2018);
+  - gas accretion limited by the gap the planet opens (Tanigawa &
+    Tanaka 2016; Kanagawa et al. 2015);
+  - Type I migration (Tanaka et al. 2002), slowed in gaps;
+  - resonance capture;
+  - orbit-crossing instabilities (Chambers et al. 1996);
+  - flybys, and binary companions.
+- **Star:** fits to stellar evolution tracks, from protostar to white
+  dwarf (or to a supernova for heavy stars).
 
-Plain HTML + CSS + vanilla JavaScript in one file. No framework, no
-bundler, no dependencies — it runs straight off the filesystem or a
-static host. All five generators work on a shared grid model
-(`WALL` / `FLOOR` / `DOOR` / `WATER` / `PATH` cells, plus a `features`
-array for glyphs like headstones or sarcophagi that sit on top of the
-grid) and share rendering helpers (a seeded PRNG, flood-fill region
-detection, multi-source BFS for cave/crypt depth-shading, and a common
-ink-outline/door/feature renderer). Each generator is a self-contained
-function — see `index.html`, search for `generateCave`, `generateMansion`,
-`generateCrypt`, `generateGraveyard`, `generateVillage`.
+Each module's header gives the details and references.
 
-## Design notes
+## Layout
 
-- **Seeding**: seed strings are hashed with `cyrb53` into a 32-bit int,
-  which feeds a `mulberry32` PRNG. The map type is folded into the hash
-  so switching type on the same seed doesn't just reuse the same random
-  stream.
-- **Cave connectivity**: cellular automata can produce disconnected
-  pockets. Regions are found via flood fill, sorted by size, and every
-  region smaller than the main cavern is either filled back in (if
-  tiny) or tunnel-connected to the main region with a biased random
-  walk, so the map is always fully navigable.
-- **Depth shading**: caves and crypts run a multi-source BFS from every
-  floor cell to shade "deep rock" darker than rock immediately next to
-  a passage — this reads as depth without needing a lighting model.
-  Mansions and graveyards skip this (their walls are thin partitions,
-  not a rock mass), so they stay flat and blueprint-like by contrast.
-- **Rooms carry secrets**: mansion rooms, crypt chambers, and village
-  buildings each have a small chance of being generated as "secret"
-  (locked room, sealed vault, boarded-up cottage, etc.). These use the
-  same door/wall rendering as everything else — nothing on the map
-  itself gives them away — but are flagged in the sidebar's room list so
-  the person running the game knows where they are without the map
-  spoiling it visually.
-- **Shared surname pool**: mansion, graveyard, and village generators
-  all draw family names from the same `SURNAME_POOL` — a mausoleum's
-  "Family," a village "Residence," and (already) a mansion called
-  "Ashcombe Hall" can share a surname, so the same seed's worth of
-  fictional town feels like one town rather than three unrelated casts.
-- **Threats are Keeper-authored, not generated**: a placed marker starts
-  completely blank (`blankThreat()`) — no name, no stats, no flavor text.
-  The stat block's derived fields (HP, MP, Damage Bonus/Build) are
-  computed live from the 7e core-rulebook formulas as the Keeper types
-  in characteristics, but the characteristics themselves, and everything
-  else (name, attacks, skills, notes), are entirely the Keeper's own.
-  Markers are drawn as a separate overlay pass after the base map, gated
-  by "Show markers," so they're never part of a generator's output.
+| File | What it does |
+| --- | --- |
+| `index.html` | The page: layout, styles, and the script tags. |
+| `src/app.js` | Wires the controls and readings to the engine. It runs no physics. |
+| `src/render.js` | Draws the cloud, the disk, the star and the planets on a canvas. |
+| `src/engine.js` | Runs the world against a clock in a Web Worker, in time-budgeted slices. |
+| `src/system.js` | One world: its stages, tools, event log and saving. |
+| `src/cloud.js` | The collapse (SPH). |
+| `src/disk.js` | The gas and dust disk. |
+| `src/planets.js` | Planet growth, migration and dynamics. |
+| `src/star.js` | Stellar evolution. |
+| `src/rng.js` | Seeded random numbers, so a seed always gives the same world. |
+
+Every module works as a plain script on the page, inside the worker, and
+under Node.
+
+## Tests
+
+```sh
+node tests/soak.js --quick    # 2 clouds to 1 Gyr, about a minute
+node tests/soak.js            # 3 clouds to 10 Gyr
+node tests/ui.js              # drives the page in headless Chromium
+```
+
+The soak test runs whole systems headless. It fails on errors, broken
+numbers, slow steps, a mass budget that doesn't add up, or a save that
+doesn't restore exactly. The page test uses every tool and view on a
+phone-sized screen and fails on any page error.
+
+`node tools/build.mjs` writes `dist/solar-nebula.html`: the page with
+its scripts inlined into one file. `node tools/pace.js [seed]` shows how
+long each stage takes on screen at ×1.
