@@ -81,10 +81,23 @@ and app.
   point. If a save drifts, the soak test says so.
 - **The mass budget.** Anything that removes mass must add it to a
   `totals` bucket (`Planets.lose`, wind, jets, photoevaporation, the
-  sweep tool). `System.budget` adds the buckets up.
+  sweep and flyby tools). Tools that add mass (planet, dust, and gas in
+  the cloud) raise the starting mass instead. `System.budget` adds it
+  all up, and the soak test checks it with every tool in use.
+- **Companion stars are bodies too** (`kind: 'star'`, in `d.bodies` as
+  well as `d.companions`). Rules made for planets must skip them,
+  because Hill spheres, chaotic zones and embryo spacing are only valid
+  for bodies much lighter than the star. Treating a companion as a
+  planet once wiped out every binary's inner disk. What a companion
+  allows is `Disk.truncate` (the disk's edge and the streams across the
+  gap) plus the Holman–Wiegert check in `encounters`.
+- **The star's late phases are brief.** `Star.stepLimit` keeps steps
+  short enough not to jump over the red-giant tip, the asymptotic giant
+  branch and the planetary nebula. Keep it in `Disk.maxDt`.
 - **The clock.** The page's age runs from the start of the collapse. The
   disk keeps the star's own age in `d.age`, which the physics needs, and
-  the star's birth time in `d.bornAt`; `System.clock` adds them.
+  the star's birth time in `d.bornAt`; `clock()` in system.js adds
+  them.
 - **Calibration.** The defaults were tuned together so that:
   - a 1.5 M☉, 31 K, spin 0.02 cloud makes a star of about 1 M☉;
   - the gas lasts about 1.5–2 Myr;
